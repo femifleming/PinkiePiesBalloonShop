@@ -18,10 +18,10 @@ namespace fp
 // When the snow starts, the output hands over to the resynthesis in 40 ms (once it has heard
 // a full window). At first it follows the live sound closely; then each bin's level and pitch
 // follow it at a rate that slows as the snow builds, (1 - amount)^2 per frame, so the spectrum
-// stiffens and stops: after 5 s the amount reaches 1 and every bin is held, ringing at the
+// stiffens and stops: after the fade-in time (5 s to 5 min, set by the player) the amount reaches 1 and every bin is held, ringing at the
 // pitch it last had, until the snow is switched off. (The handover is quick on purpose: the
 // resynthesis runs about 0.34 s behind the live sound, and any crossfade between them comb-filters
-// while they overlap, so it's kept to a moment.) Switching it off thaws it over 2 s, the bins
+// while they overlap, so it's kept to a moment.) Switching it off thaws it over the fade-out time (also 5 s to 5 min), the bins
 // following the live sound again, then hands back in 40 ms. With no snow the output is untouched (bit-exact) and the STFT rests.
 class SnowFreeze
 {
@@ -46,10 +46,9 @@ public:
             c.peakOf.assign ((size_t) bins, 0);
             c.tonal.assign ((size_t) bins, 0);
         }
-        upStep = (float) (1.0 / (fadeInSec * sr));
-        downStep = (float) (1.0 / (thawSec * sr));
+        setFadeTimes (5.0f, 5.0f);
         xfStep = (float) (1.0 / (0.04 * sr));
-        idx = 0; hopCount = 0; amount = 0.0f; xf = 0.0f; framesHeard = 0; fresh = true;
+        idx = 0; hopCount = 0; ramp = 0.0; amount = 0.0f; xf = 0.0f; framesHeard = 0; fresh = true;
     }
 
     void process (float* L, float* R, int n, bool on) noexcept
@@ -69,7 +68,9 @@ public:
         }
         for (int i = 0; i < n; ++i)
         {
-            amount = on ? std::min (1.0f, amount + upStep) : std::max (0.0f, amount - downStep);
+            // counted in double: a 5 min fade moves 1/14,400,000 a sample, below a float's step near 1
+            ramp = on ? std::min (1.0, ramp + upStep) : std::max (0.0, ramp - downStep);
+            amount = (float) ramp;
             // hand over to the resynthesis once it has a full window (8 frames), hand back once thawed
             if ((on || amount > 0.0f) && framesHeard >= 8) xf = std::min (1.0f, xf + xfStep);
             else if (! on && amount <= 0.0f) xf = std::max (0.0f, xf - xfStep);
@@ -85,7 +86,15 @@ public:
     }
 
     float getAmount() const noexcept { return amount; }   // 0 clear .. 1 frozen solid
-    static constexpr double fadeInSec = 5.0, thawSec = 2.0;
+
+    // how long the freeze takes to come in and to thaw, in seconds (5 s to 5 min). The amount
+    // moves in a straight line, so changing a time halfway carries on from where it is.
+    void setFadeTimes (float inSec, float outSec) noexcept
+    {
+        upStep = 1.0 / (std::clamp ((double) inSec, minFadeSec, maxFadeSec) * sr);
+        downStep = 1.0 / (std::clamp ((double) outSec, minFadeSec, maxFadeSec) * sr);
+    }
+    static constexpr double minFadeSec = 5.0, maxFadeSec = 300.0;
 
 private:
     struct Channel { std::vector<float> in, out, env, adv, prevPhase, outPhase, refPhase; std::vector<int> peakOf; std::vector<char> tonal; };
@@ -193,7 +202,8 @@ private:
     std::unique_ptr<juce::dsp::FFT> fft;
     std::vector<float> window, frame, omega;
     Channel ch[2];
-    float amount = 0.0f, upStep = 0.0f, downStep = 0.0f, xf = 0.0f, xfStep = 0.0f;
+    float amount = 0.0f, xf = 0.0f, xfStep = 0.0f;
+    double ramp = 0.0, upStep = 0.0, downStep = 0.0;
     int framesHeard = 0;
     bool fresh = true;
     Rng rng;

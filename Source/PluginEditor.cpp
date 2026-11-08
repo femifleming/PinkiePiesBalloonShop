@@ -698,6 +698,19 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
         snowAtt = std::make_unique<ParameterAttachment> (*sn, [this] (float v) { snowValue = v; });
         snowAtt->sendInitialUpdate();
     }
+    {
+        const char* fadeIds[] = { ids::snowIn, ids::snowOut };
+        const char* words[] = { "fade in", "fade out" };
+        for (int i = 0; i < 2; ++i)
+            if (auto* prm = p.apvts.getParameter (fadeIds[i]))
+            {
+                auto& f = snowFades[i];
+                f.param = prm; f.word = words[i];
+                f.r = { snowButton.getX() + 4.0f, snowButton.getBottom() - 2.0f + 15.0f * (float) i, 92.0f, 15.0f };
+                f.att = std::make_unique<ParameterAttachment> (*prm, [&f, this] (float v) { f.value = v; repaint(); });
+                f.att->sendInitialUpdate();
+            }
+    }
     if (auto* bp = p.apvts.getParameter (ids::fxBypass))
     {
         bypassAtt = std::make_unique<ParameterAttachment> (*bp, [this] (float v) { bypassValue = v; });
@@ -2086,8 +2099,10 @@ namespace
           "Clouds bring thunder too, which pulls the rain's lowpass down in slow rolls.\n\n"
           "Rain and clouds together make a storm. Lightning strikes now and then and drops a random effect from the store into the room for a minute or so. "
           "If you like it, tick it in the store and it stays.\n\n"
-          "Click the snowflake to make it snow. Over five seconds everything freezes: the sound slows until it stops completely and holds, "
-          "and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over two seconds." },
+          "Click the snowflake to make it snow. Everything freezes over the fade-in time: the sound slows until it stops completely and holds, "
+          "and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over the fade-out time. "
+          "Both times are written under the snowflake. Drag one up or down, or scroll on it, to set it anywhere from 5 seconds to 5 minutes. "
+          "Double-click puts it back to 5 seconds." },
         { "The balloon store",
           "Click the striped sign to open the store. Pick an effect and a little gift box drops out of the shop with four balloons tied to it: its two controls, then its level and its width. "
           "The box takes a place on the shelf like the other effects, so you can drag it to wherever you want it in the sound. Width spreads the effect from mono in the middle to wide stereo.\n\n"
@@ -2878,6 +2893,24 @@ void FreakiePieEditor::contentMouse (const MouseEvent& e, int phase)
         return;
     }
     if (phase == 0)
+        for (auto& f : snowFades)
+            if (f.att != nullptr && f.r.contains (p))
+            {
+                if (e.getNumberOfClicks() > 1) { f.att->setValueAsCompleteGesture (5.0f); return; }
+                dragFade = &f;
+                fadeDragNorm = f.param->convertTo0to1 (f.value);
+                fadeDragY = p.y;
+                f.att->beginGesture();
+                return;
+            }
+    if (phase == 1 && dragFade != nullptr)
+    {
+        const float n = jlimit (0.0f, 1.0f, fadeDragNorm - (p.y - fadeDragY) / 160.0f);   // up = longer
+        dragFade->att->setValueAsPartOfGesture (dragFade->param->convertFrom0to1 (n));
+        return;
+    }
+    if (phase == 2 && dragFade != nullptr) { dragFade->att->endGesture(); dragFade = nullptr; return; }
+    if (phase == 0)
     {
         for (auto* pl : pills)
             if (pl->r.contains (p))
@@ -2974,6 +3007,15 @@ void FreakiePieEditor::contentMouse (const MouseEvent& e, int phase)
 void FreakiePieEditor::contentWheel (const MouseEvent& e, const MouseWheelDetails& w)
 {
     const auto p = toContent (e);
+    for (auto& f : snowFades)
+        if (f.att != nullptr && f.r.contains (p))
+        {
+            float d = std::abs (w.deltaY) >= std::abs (w.deltaX) ? w.deltaY : -w.deltaX;
+            if (w.isReversed) d = -d;
+            const float n = jlimit (0.0f, 1.0f, f.param->convertTo0to1 (f.value) + d * 0.15f);
+            f.att->setValueAsCompleteGesture (f.param->convertFrom0to1 (n));
+            return;
+        }
     for (auto* pl : pills)
         if (pl->r.contains (p))
         {
@@ -3805,6 +3847,19 @@ void FreakiePieEditor::drawSnowButton (Graphics& g) const
     g.drawText (snowOn() ? (frozen >= 1.0f ? "snow: frozen" : "snow: on") : "snow", snowButton.withTrimmedLeft (40.0f), Justification::centredLeft);
 }
 
+// the snow's two fade times, small and quiet under the snowflake
+void FreakiePieEditor::drawSnowFades (Graphics& g) const
+{
+    g.setFont (SadLookAndFeel::uiFont (10.0f, true));
+    for (auto& f : snowFades)
+    {
+        if (f.att == nullptr) continue;
+        const bool held = dragFade == &f;
+        g.setColour (palette::blush.withAlpha (held ? 1.0f : (snowOn() ? 0.9f : 0.7f)));
+        g.drawText (String (f.word) + "  " + snowFadeText (f.value), f.r, Justification::centredLeft);
+    }
+}
+
 // the weather switch: a sun that hides behind clouds
 void FreakiePieEditor::drawCloudyButton (Graphics& g) const
 {
@@ -4328,6 +4383,7 @@ void FreakiePieEditor::paintContent (Graphics& g)
     drawStoreSign (g);
     drawCloudyButton (g);
     drawSnowButton (g);
+    drawSnowFades (g);
     drawHelpButton (g);
     drawResetButton (g);
 

@@ -58,6 +58,16 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::helium, 1 }, "Helium", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::cloudy, 1 }, "Cloudy", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::snow, 1 }, "Snow", false));
+    {
+        // 5 s to 5 min; the middle of the range sits at 30 s so the short times are easy to set
+        auto secs = [] (float v, int) { return snowFadeText (v); };
+        for (auto [id, name] : { std::pair { ids::snowIn, "Snow Fade In" }, std::pair { ids::snowOut, "Snow Fade Out" } })
+        {
+            NormalisableRange<float> r (5.0f, 300.0f);
+            r.setSkewForCentre (30.0f);
+            layout.add (std::make_unique<F> (ParameterID { id, 1 }, name, r, 5.0f, A().withStringFromValueFunction (secs)));
+        }
+    }
     mixParam (ids::stAmount, "Stutter", 0.0f);
     mixParam (ids::stBounce, "Stutter Bounce", 0.5f);
     mixParam (ids::stSway,   "Stutter Sway", 0.0f);
@@ -159,6 +169,7 @@ FreakiePieProcessor::FreakiePieProcessor()
     p_cloudy = get (ids::cloudy);      p_fxBypass = get (ids::fxBypass);
     p_grainsLevel = get (ids::grainsLevel);
     p_snow = get (ids::snow);
+    p_snowIn = get (ids::snowIn); p_snowOut = get (ids::snowOut);
     p_stAmount = get (ids::stAmount); p_stBounce = get (ids::stBounce);
     p_stSway = get (ids::stSway);     p_stCutup = get (ids::stCutup);
     p_sgFreeze = get (ids::sgFreeze);
@@ -516,6 +527,7 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     cloudAmount.store (weather.getClouds());
     thunderAmount.store (weather.getThunder());
 
+    snowFreeze.setFadeTimes (p_snowIn->load(), p_snowOut->load());
     snowFreeze.process (oL, oR, n, p_snow->load() > 0.5f);   // snow: everything freezes, then the EQ still shapes it
     snowAmount.store (snowFreeze.getAmount());
     masterEq.process (oL, oR, n, eq);   // the curve drawn on the chalkboard
@@ -604,7 +616,7 @@ void FreakiePieProcessor::resetToNormal()
 
 bool FreakiePieProcessor::trixieMayTouch (const String& id)
 {
-    for (auto* no : { ids::fxBypass, ids::snow, ids::toneOn, ids::balloonSfx, ids::grainsLevel, ids::catchFrom })
+    for (auto* no : { ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::toneOn, ids::balloonSfx, ids::grainsLevel, ids::catchFrom })
         if (id == no) return false;
     return ! id.endsWith ("Owned");
 }

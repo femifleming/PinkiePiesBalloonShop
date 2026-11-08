@@ -131,7 +131,7 @@ Click the sun to make it cloudy. Clouds drift through the bouquet, and any ballo
 
 Rain and clouds together make a storm. Lightning strikes now and then and drops a random effect from the store into the room for a minute or so. If you like it, tick it in the store and it stays.
 
-Click the snowflake to make it snow. Over five seconds everything freezes: the sound slows until it stops completely and holds, and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over two seconds.
+Click the snowflake to make it snow. Everything freezes over the fade-in time: the sound slows until it stops completely and holds, and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over the fade-out time. Both times are written under the snowflake. Drag one up or down, or scroll on it, to set it anywhere from 5 seconds to 5 minutes. Double-click puts it back to 5 seconds.
 
 ![Weather](help/cloudy.jpg)
 

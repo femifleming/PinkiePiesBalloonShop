@@ -712,12 +712,40 @@ int main (int argc, char** argv)
         run (1.5);
         const double held440 = level (440.0), new660 = level (660.0);
         *p.apvts.getRawParameterValue (ids::snow) = 0.0f;
-        run (2.4);
+        run (5.2);
         const float thawed = p.snowAmount.load();
         run (1.0);
         std::printf ("snow: frozen %.2f after 2.5 s, %.2f after 5.2 s; input moved to 660 Hz -> 440 held at %.3f, 660 only %.4f; "
-                     "thawed %.2f after 2.4 s, then untouched (max diff %g)\n", half, full, held440, new660, thawed, maxErr);
+                     "thawed %.2f after 5.2 s, then untouched (max diff %g)\n", half, full, held440, new660, thawed, maxErr);
         if (std::abs (half - 0.5f) > 0.05f || full < 1.0f || held440 < 0.08 || new660 > 0.005 || thawed > 0.0f || maxErr != 0.0) FAIL_HERE();
+        // the fade times: 1 min in is half frozen after 30 s; 5 min out is still 90 % frozen 30 s into the thaw;
+        // and shortening the thaw halfway carries on from where it is, without a jump
+        {
+            FreakiePieProcessor q;
+            q.setPlayConfigDetails (2, 2, 48000, 256);
+            q.prepareToPlay (48000, 256);
+            q.apvts.getParameter (ids::snowIn)->setValueNotifyingHost (q.apvts.getParameter (ids::snowIn)->convertTo0to1 (60.0f));
+            q.apvts.getParameter (ids::snowOut)->setValueNotifyingHost (q.apvts.getParameter (ids::snowOut)->convertTo0to1 (300.0f));
+            const String inText = q.apvts.getParameter (ids::snowIn)->getCurrentValueAsText(), outText = q.apvts.getParameter (ids::snowOut)->getCurrentValueAsText();
+            auto go = [&] (double sec) { for (int b = 0; b < (int) (sec * 48000 / 256); ++b) { buf.clear(); q.processBlock (buf, m); } };
+            *q.apvts.getRawParameterValue (ids::snow) = 1.0f;
+            go (30.0);
+            const float in30 = q.snowAmount.load();
+            go (31.0);
+            const float in61 = q.snowAmount.load();
+            *q.apvts.getRawParameterValue (ids::snow) = 0.0f;
+            go (30.0);
+            const float out30 = q.snowAmount.load();
+            q.apvts.getParameter (ids::snowOut)->setValueNotifyingHost (q.apvts.getParameter (ids::snowOut)->convertTo0to1 (5.0f));
+            go (256.0 / 48000.0);
+            const float afterChange = q.snowAmount.load();
+            go (4.6);
+            const float out35 = q.snowAmount.load();
+            std::printf ("snow fade times (in %s, out %s): %.3f after 30 s in, %.2f after 61 s; %.3f 30 s into the thaw, %.3f just after setting out to 5 s, %.2f 4.6 s later\n",
+                         inText.toRawUTF8(), outText.toRawUTF8(), in30, in61, out30, afterChange, out35);
+            if (inText != "1 min" || outText != "5 min" || std::abs (in30 - 0.5f) > 0.005f || in61 < 1.0f || std::abs (out30 - 0.9f) > 0.005f
+                || std::abs (afterChange - out30) > 0.01f || out35 > 0.0f) FAIL_HERE();
+        }
         // the way in stays smooth: no dip while the snow builds (a slow crossfade against the late resynthesis would cancel)
         {
             FreakiePieProcessor q;
@@ -1890,7 +1918,7 @@ int main (int argc, char** argv)
             const int flakes = FreakieTestAccess::flakes (e);
             shoot ("_snow.png");
             FreakieTestAccess::clickAt (e, FreakieTestAccess::snowButton (e));
-            for (int k = 0; k < (int) (4.0 * 48000 / 512); ++k)
+            for (int k = 0; k < (int) (6.0 * 48000 / 512); ++k)
             {
                 p.processBlock (sil, mm);
                 uiDue += 512.0f / 48000.0f;

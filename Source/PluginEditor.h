@@ -564,6 +564,19 @@ private:
     float snowValue = 0.0f, snowVis = 0.0f, frozen = 0.0f, snowDepth = 0.0f, flakeBudget = 0.0f;
     std::unique_ptr<juce::ParameterAttachment> snowAtt;
     juce::Rectangle<float> snowButton { 726.0f, 76.0f, 92.0f, 40.0f };
+    // the two fade times under the snowflake: drag up or down, or scroll; double-click for 5 s
+    struct SnowFade
+    {
+        juce::Rectangle<float> r;
+        juce::RangedAudioParameter* param = nullptr;
+        std::unique_ptr<juce::ParameterAttachment> att;
+        float value = 5.0f;
+        const char* word = "";
+    };
+    SnowFade snowFades[2];
+    SnowFade* dragFade = nullptr;
+    float fadeDragNorm = 0.0f, fadeDragY = 0.0f;
+    void drawSnowFades (juce::Graphics&) const;
     void snowStep (float dt);
     void drawSnowButton (juce::Graphics&) const;
     void drawSnowbank (juce::Graphics&) const;

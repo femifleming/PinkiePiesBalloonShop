@@ -11,6 +11,14 @@
 #include "dsp/TrixieNoise.h"
 #include "Presets.h"
 
+// a snow fade time as people say it: "12 s", "1 min 20 s", "5 min"
+inline juce::String snowFadeText (float seconds)
+{
+    const int s = juce::roundToInt (seconds);
+    if (s < 60) return juce::String (s) + " s";
+    return juce::String (s / 60) + " min" + (s % 60 != 0 ? " " + juce::String (s % 60) + " s" : juce::String());
+}
+
 namespace ids
 {
     inline constexpr const char* sgMix      = "sgMix";
@@ -48,7 +56,9 @@ namespace ids
     inline constexpr const char* stBounce   = "stBounce";     // straight rolls .. bouncing, grainy events
     inline constexpr const char* stSway     = "stSway";       // swing: every second 16th held back
     inline constexpr const char* stCutup    = "stCutup";      // events taken from other steps of the last bar
-    inline constexpr const char* snow       = "snow";         // a master spectral freeze that comes in over 5 s
+    inline constexpr const char* snow       = "snow";         // a master spectral freeze that comes in over the fade-in time
+    inline constexpr const char* snowIn     = "snowIn";       // seconds for the snow to freeze everything (5 s .. 5 min)
+    inline constexpr const char* snowOut    = "snowOut";      // seconds for it to thaw (5 s .. 5 min)
     inline constexpr const char* cloudy     = "cloudy";       // clouds drift among the balloons; thunder; with rain, lightning
     inline constexpr const char* fxBypass   = "fxBypass";
     inline constexpr const char* grainsLevel = "grainsLevel"; // the frozen balloons' volume     // the effects (chain + store) step aside: input, tone and frozen balloons only
@@ -113,7 +123,7 @@ public:
     // the shelf in its first order (caught sounds stay)
     void resetToNormal();
     // Trixie's magic: one parameter, or every one she's allowed to touch, set at random. She leaves
-    // alone what would silence or stop things (the bypass, the snow, the sound switches, the frozen
+    // alone what would silence or stop things (the bypass, the snow and its fade times, the sound switches, the frozen
     // balloons' volume) and never buys anything at the store.
     static bool trixieMayTouch (const juce::String& paramID);
     static void randomise (juce::RangedAudioParameter&, juce::Random&);
@@ -158,6 +168,7 @@ public:
     fp::Stutter stutter;   // (the editor watches its event counter)
 private:
     std::atomic<float>* p_snow = nullptr;
+    std::atomic<float>* p_snowIn = nullptr; std::atomic<float>* p_snowOut = nullptr;
     std::atomic<float>* p_rain = nullptr;
     std::atomic<float>* p_sgFreeze = nullptr;
     std::atomic<float>* p_grSize = nullptr;   std::atomic<float>* p_grDensity = nullptr; std::atomic<float>* p_grShape = nullptr;
