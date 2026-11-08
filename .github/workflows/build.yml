@@ -1,0 +1,110 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NAME: "Pinkie Pies Balloon Shop"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            package: PinkiePiesBalloonShop-macOS.zip
+          - name: Windows
+            os: windows-latest
+            package: PinkiePiesBalloonShop-Windows.zip
+          - name: Linux
+            os: ubuntu-22.04
+            package: PinkiePiesBalloonShop-Linux.tar.gz
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev \
+            libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev ninja-build
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then GEN="-G Ninja"; else GEN=""; fi
+          cmake -B build $GEN -DCMAKE_BUILD_TYPE=Release -DBALLOONSHOP_BUILD_TESTS=OFF -DBALLOONSHOP_COPY_AFTER_BUILD=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --target BalloonShop_All --parallel 4
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          A=build/BalloonShop_artefacts/Release
+          mkdir -p "dist/$NAME"
+          cp -R "$A/Standalone/$NAME.app" "$A/AU/$NAME.component" "$A/VST3/$NAME.vst3" "dist/$NAME/"
+          # ad-hoc signatures (not notarised: see the README for the first-launch step)
+          codesign --force --deep -s - "dist/$NAME/$NAME.app"
+          codesign --force --deep -s - "dist/$NAME/$NAME.component"
+          codesign --force --deep -s - "dist/$NAME/$NAME.vst3"
+          cp README.md LICENSE "dist/$NAME/"
+          cd dist && ditto -c -k --keepParent "$NAME" "${{ matrix.package }}"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $A = "build/BalloonShop_artefacts/Release"
+          New-Item -ItemType Directory -Force "dist/$env:NAME" | Out-Null
+          Copy-Item -Recurse "$A/VST3/$env:NAME.vst3" "dist/$env:NAME/"
+          Copy-Item "$A/Standalone/$env:NAME.exe" "dist/$env:NAME/"
+          Copy-Item README.md, LICENSE "dist/$env:NAME/"
+          Compress-Archive -Path "dist/$env:NAME" -DestinationPath "dist/${{ matrix.package }}"
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          A=build/BalloonShop_artefacts/Release
+          mkdir -p "dist/$NAME"
+          cp -R "$A/VST3/$NAME.vst3" "$A/LV2/$NAME.lv2" "dist/$NAME/"
+          cp "$A/Standalone/$NAME" "dist/$NAME/"
+          cp Resources/icon/icon_1024.png "dist/$NAME/pinkiepiesballoonshop.png"
+          cp README.md LICENSE "dist/$NAME/"
+          tar -czf "dist/${{ matrix.package }}" -C dist "$NAME"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}
+          path: dist/${{ matrix.package }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Checksums
+        run: cd packages && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: packages/*
+          generate_release_notes: true

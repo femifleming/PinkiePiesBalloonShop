@@ -1,0 +1,15 @@
+# build output
+build/
+cmake-build-*/
+out/
+
+# test output
+*.wav
+shot*.png
+*_store_layout.json
+
+# OS / editor clutter
+.DS_Store
+.vscode/
+.idea/
+*.swp
