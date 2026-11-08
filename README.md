@@ -29,8 +29,12 @@ Get the latest version from the [Releases page](https://github.com/femifleming/P
 ### macOS with Homebrew
 
 ```sh
-brew install --cask femifleming/pinkiepiesballoonshop/pinkiepiesballoonshop
+brew tap femifleming/pinkiepiesballoonshop
+brew trust femifleming/pinkiepiesballoonshop      # recent Homebrew asks you to trust a tap first
+brew install --cask pinkiepiesballoonshop
 ```
+
+If you installed it by hand before, add `--force` to the last line so Homebrew can replace those copies.
 
 This puts the app in `/Applications` and the Audio Unit and VST3 in `~/Library/Audio/Plug-Ins`. Update with `brew upgrade --cask pinkiepiesballoonshop`, remove with `brew uninstall --cask pinkiepiesballoonshop`.
 
