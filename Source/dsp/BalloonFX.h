@@ -9,7 +9,7 @@ namespace fp
 //==============================================================================
 // The playable balloons' sound.
 //
-//  * Pop balloons: while the pump is held, air hiss (on the output) and short plucked saws
+//  * Pop balloons: while the pump is held, air hiss (on the output, or into the effects) and short plucked saws
 //    on random notes of the selected scale (fed into the effect chain). A pop
 //    is a loud, randomised burst modelled on a real one (see Pop below).
 //
@@ -78,9 +78,9 @@ public:
     // gets its own wavefold, attack (mostly plucky, sometimes slower) and pan. Plucks ring out
     // after you let go. It is added to the *input of the effect chain* (so the gate, pitch
     // shifter, grains and reverb all play with it) and never reaches the sound-balloon sampler.
-    void addInflationTone (float* L, float* R, int n, const Scale& scale, bool on) noexcept
+    void addInflationTone (float* L, float* R, int n, const Scale& scale) noexcept
     {
-        const bool pump = pumping.load() && on;
+        const bool pump = pumping.load();
         const float size = std::clamp (pumpSize.load(), 0.0f, 1.3f);
         if (pump && ! wasPumping) pluckTimer = (int) (0.05 * sr);   // the first one comes straight away
         wasPumping = pump;
@@ -130,12 +130,11 @@ public:
         return 0.0f;
     }
 
-    // grainL/grainR: where the frozen balloons' grains go (null: into out, with everything else).
-    // The live monitor of a balloon that's still filling always goes to out.
-    void process (const float* inL, const float* inR, float* outL, float* outR, int n, const GrainSettings& gs,
-                  float* grainL = nullptr, float* grainR = nullptr) noexcept
+    // The air going in (hiss) and the pops, written into L/R (cleared first). The processor
+    // either adds them to the output or feeds them into the effects (the pop sounds' right-click
+    // menu); with the balloon sounds switched off it's silence.
+    void renderSfx (float* L, float* R, int n) noexcept
     {
-        if (grainL == nullptr || grainR == nullptr) { grainL = outL; grainR = outR; }
         // pops requested by the editor
         const int req = popRequests.load();
         while (lastPop != req)
@@ -144,10 +143,6 @@ public:
             for (auto& p : pops)
                 if (! p.active) { trigger (p, std::clamp (popSize.load(), 0.0f, 1.0f)); break; }
         }
-
-        for (int i = 0; i < kVoices; ++i) voiceBlock (i, inL, inR, outL, outR, grainL, grainR, n, gs);
-
-        // the air going in (hiss) + pops, on the output (unless the balloon sounds are switched off)
         const bool sfx = sfxOn.load();
         if (! sfx) for (auto& p : pops) p.active = false;
         const bool pump = pumping.load() && sfx;
@@ -178,9 +173,18 @@ public:
                 yl += 0.99f * std::tanh (pl);
                 yr += 0.99f * std::tanh (pr);
             }
-            outL[s] += yl;
-            outR[s] += yr;
+            L[s] = yl;
+            R[s] = yr;
         }
+    }
+
+    // The sound balloons. grainL/grainR: where the frozen balloons' grains go (null: into out,
+    // with everything else). The live monitor of a balloon that's still filling always goes to out.
+    void process (const float* inL, const float* inR, float* outL, float* outR, int n, const GrainSettings& gs,
+                  float* grainL = nullptr, float* grainR = nullptr) noexcept
+    {
+        if (grainL == nullptr || grainR == nullptr) { grainL = outL; grainR = outR; }
+        for (int i = 0; i < kVoices; ++i) voiceBlock (i, inL, inR, outL, outR, grainL, grainR, n, gs);
     }
 
     std::atomic<float> toneSemis { 0.0f };   // the last plucked note, for the UI

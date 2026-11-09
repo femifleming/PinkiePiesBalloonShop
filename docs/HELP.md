@@ -1,6 +1,6 @@
 # Pinkie Pie's Balloon Shop: help
 
-This is the same guide you'll find inside the plug-in: click the little purple book under the rain cloud to open the library, where Twilight reads in the corner.
+This is the same guide you'll find inside the plug-in: click **help** in the top right corner to open the library, where Twilight reads in the corner.
 
 ![The library](help/library.jpg)
 
@@ -11,7 +11,7 @@ This is the same guide you'll find inside the plug-in: click the little purple b
 - [The effects](#the-effects)
 - [Grains](#grains)
 - [The gumball machine](#the-gumball-machine)
-- [The shelf](#the-shelf)
+- [The order](#the-order)
 - [The pop pump](#the-pop-pump)
 - [Catching sounds](#catching-sounds)
 - [The canister](#the-canister)
@@ -55,7 +55,7 @@ First the spectral smear (the blue balloons), which blurs the sound across time.
 
 Then the pitch shifter. Shift picks the interval, snapped to the scale chosen on the card at the top left, and pitch feedback sends it round again so it keeps climbing.
 
-Then the grains, and last a reverb that keeps the low end clean. That's the order they start in: the shelf chapter says how to change it.
+Then the grains, and last a reverb that keeps the low end clean. That's the order they start in: the order chapter says how to change it.
 
 Each effect has a mix balloon. When a mix balloon is empty, that effect is out of the way.
 
@@ -83,15 +83,15 @@ These ideas come from Alexander Mesker's study of Autechre's music: the bouncing
 
 Now and then a pluck from the pop pump bounces too.
 
-## The shelf
+## The order
 
-The effects stand on the long shelf, and the sound goes through them from left to right, from in to out: the spectral smear (blue), pitch (yellow), grains (mint), reverb (lilac), the gumball machine (orange) and a gift box for each effect from the store.
+The sound goes through the effects from left to right, from in to out: the spectral smear (blue), pitch (yellow), grains (mint), reverb (lilac), the gumball machine (orange) and a gift box for each effect from the store.
 
-Drag any of them along the shelf. The others shuffle aside to make room, and when you let go the sound follows the new order, with a tiny dip so it never clicks. The numbers on the shelf show the order. It's saved with your session.
+![The order list](help/order.jpg)
 
-The loop (main feedback) and the caught sounds stay on the floor: the loop wraps round the whole shelf.
+The order list waits just off the left edge of the window. Move the cursor to the left edge and it slides out, with the effects from top (in) to bottom (out). Drag one up or down to move it: the others make room, and when you let go the bows hop to their new places and the sound follows with a tiny dip so it never clicks. The die at the top rolls a new order. The order is saved with your session.
 
-![The shelf](help/shelf.jpg)
+The loop (main feedback) and the caught sounds stay on the floor: the loop wraps round all the effects.
 
 ## The pop pump
 
@@ -101,7 +101,7 @@ While it fills, short plucked saws play on random notes of the scale, slowly and
 
 Somewhere between 5 and 12 seconds the balloon pops, and every pop is different.
 
-The clear bubble above holds two tokens. Pop sounds turns the hiss and the pops on or off. Plucks turns the plucked notes on or off.
+The pop sounds switch at the top right, above help and reset, turns the hiss and the pops on or off. Right-click it to feed them into the effects instead of straight out, so the pops go through the chain with your sound.
 
 ![The pop pump](help/pumping.jpg)
 
@@ -125,13 +125,27 @@ Slide the canister along its rail to choose where the frozen balloons go. To the
 
 ## Weather
 
-Click the cloud at the top right to make it rain. Rain eases a gentle lowpass onto the output and soaks the balloons.
+The weather switches run along the top of the window: the sun and cloud (cloudy), the rain cloud, the snowflake, the hot sun (heatwave) and auto weather. Click one to turn it on and again to turn it off. Rain and clouds together make a storm.
 
-Click the sun to make it cloudy. Clouds drift through the bouquet, and any balloon inside one slowly wanders to new values, with a little tag showing where it has got to. Clouds bring thunder too, which pulls the rain's lowpass down in slow rolls.
+Rain eases a gentle lowpass onto the output and soaks the balloons.
 
-Rain and clouds together make a storm. Lightning strikes now and then and drops a random effect from the store into the room for a minute or so. If you like it, tick it in the store and it stays.
+When it's cloudy, clouds drift through the bouquet, and any balloon inside one slowly wanders to new values, with a little tag showing where it has got to. Clouds bring thunder too, which pulls the rain's lowpass down in slow rolls.
 
-Click the snowflake to make it snow. Everything freezes over the fade-in time: the sound slows until it stops completely and holds, and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over the fade-out time. Both times are written under the snowflake. Drag one up or down, or scroll on it, to set it anywhere from 5 seconds to 5 minutes. Double-click puts it back to 5 seconds.
+In a storm, lightning strikes now and then and drops a random effect from the store into the room for a minute or so. If you like it, tick it in the store and it stays.
+
+Snow freezes everything over the fade-in time: the sound slows until it stops completely and holds, and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over the fade-out time. Right-click the snowflake to set both times, anywhere from 5 seconds to 5 minutes: drag along a bar or scroll on it, and double-click puts it back to 5 seconds.
+
+Snow and a heatwave never come together: turning one on sends the other away.
+
+A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.
+
+![Heatwave](help/heat.jpg)
+
+![Heatwave fade times](help/fades.jpg)
+
+![Heatwave in the rain](help/wet.jpg)
+
+With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there.
 
 ![Weather](help/cloudy.jpg)
 
@@ -141,7 +155,7 @@ Click the snowflake to make it snow. Everything freezes over the fade-in time: t
 
 ## The balloon store
 
-Click the striped sign to open the store. Pick an effect and a little gift box drops out of the shop with four balloons tied to it: its two controls, then its level and its width. The box takes a place on the shelf like the other effects, so you can drag it to wherever you want it in the sound. Width spreads the effect from mono in the middle to wide stereo.
+Click the balloon store sign at the top to open the store. Pick an effect and a little gift box drops out of the shop with four balloons tied to it: its two controls, then its level and its width. The box takes a place among the other effects, and the order list moves it about like the rest. Width spreads the effect from mono in the middle to wide stereo.
 
 Pick a bought effect again to give it back, or pop one of its balloons with the pin. Pop everything sends them all back at once.
 
@@ -167,11 +181,11 @@ Click anywhere outside the board to put it away.
 
 ## The card
 
-The card at the top left holds the presets and the scale. Every preset changes the picture behind the shop as well as the sound.
+The card holds the presets and the scale. It waits just above the top left of the window: move the cursor up there and it slides down. Every preset changes the picture behind the shop as well as the sound.
 
 The scale decides which notes the pitch shifter lands on. Everything tuned in the shop follows it.
 
-The reset button under the help book in the top corner brings everything back to normal: the first preset, a flat EQ, the plain grain shape and the shelf in its first order. Caught sounds stay where they are.
+The reset button under the help book in the top right corner brings everything back to normal: the first preset, a flat EQ, the plain grain shape and the effects in their first order. Caught sounds stay where they are.
 
 The switch underneath the card bypasses the effects, the store's ones included. Only your input and the frozen balloons are left, and the grain balloons still shape them.
 
@@ -179,11 +193,11 @@ The switch underneath the card bypasses the effects, the store's ones included. 
 
 Pinkie sits by the pop pump watching the balloons.
 
-Pops make her jump. When it rains she gets her umbrella out, and helium turns her to crystal.
+Pops make her jump. When it rains she gets her umbrella out (unless it's a heatwave too: then she lies in the puddle, soaked), and helium turns her to crystal.
 
 Leave the shop alone for a while and she falls asleep.
 
-Every so often, about once an hour, the Great and Powerful Trixie barges in. She zaps balloons from her amulet, each one jumping to a new value, then sets everything she can reach at random with one big flash and leaves. Some visits she also plays a strange synthesised noise into the shop's input, which goes through all the effects, with a chirp for every zap. Sometimes she zaps a few effects from the store onto the shelf too, and those stay. She leaves the bypass, the snow and the volume alone. If you don't like what she did, the reset button under the help book puts everything back to normal.
+Every so often, about once an hour, the Great and Powerful Trixie barges in. She zaps balloons from her amulet, each one jumping to a new value, then sets everything she can reach at random with one big flash and leaves. Some visits she also plays a strange synthesised noise into the shop's input, which goes through all the effects, with a chirp for every zap. Sometimes she zaps a few effects from the store into the room too, and those stay. She leaves the bypass and the volume alone, and never touches the snow, the heat or auto weather. If you don't like what she did, the reset button under the help book puts everything back to normal.
 
 ![Pinkie](help/trixie.jpg)
 

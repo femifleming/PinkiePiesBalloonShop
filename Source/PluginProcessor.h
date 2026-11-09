@@ -7,6 +7,8 @@
 #include "dsp/Limiter.h"
 #include "dsp/MasterEq.h"
 #include "dsp/Snow.h"
+#include "dsp/Heat.h"
+#include "dsp/AutoWeather.h"
 #include "dsp/Stutter.h"
 #include "dsp/TrixieNoise.h"
 #include "Presets.h"
@@ -47,9 +49,9 @@ namespace ids
     inline constexpr const char* grPos      = "grPos";        // where the grains read from
     inline constexpr const char* grPosRand  = "grPosRand";    // how far they wander from it
     // the inflation tone + what the sound pump catches
-    inline constexpr const char* toneOn     = "toneOn";
     inline constexpr const char* catchFrom  = "catchFrom";
     inline constexpr const char* balloonSfx = "balloonSfx";   // air hiss + pop sounds
+    inline constexpr const char* popsThru   = "popsThru";     // the hiss and pops go into the effects instead of straight out
     inline constexpr const char* grainsThru = "grainsThru";   // frozen balloons: 0 straight out .. 1 back through the effects (the canister)
     // the gumball machine: a generative stutter on the main output
     inline constexpr const char* stAmount   = "stAmount";     // how often an event happens on a 16th
@@ -59,6 +61,10 @@ namespace ids
     inline constexpr const char* snow       = "snow";         // a master spectral freeze that comes in over the fade-in time
     inline constexpr const char* snowIn     = "snowIn";       // seconds for the snow to freeze everything (5 s .. 5 min)
     inline constexpr const char* snowOut    = "snowOut";      // seconds for it to thaw (5 s .. 5 min)
+    inline constexpr const char* heat       = "heat";         // a heatwave: a slow drifting spectral smear and a wandering lowpass
+    inline constexpr const char* heatIn     = "heatIn";       // seconds for the heat to come in (5 s .. 5 min)
+    inline constexpr const char* heatOut    = "heatOut";      // seconds for it to go away (5 s .. 5 min)
+    inline constexpr const char* autoWeather = "autoWeather"; // the weather changes by itself, a spell every few minutes
     inline constexpr const char* cloudy     = "cloudy";       // clouds drift among the balloons; thunder; with rain, lightning
     inline constexpr const char* fxBypass   = "fxBypass";
     inline constexpr const char* grainsLevel = "grainsLevel"; // the frozen balloons' volume     // the effects (chain + store) step aside: input, tone and frozen balloons only
@@ -72,7 +78,7 @@ namespace ids
     }
 }
 
-class FreakiePieProcessor : public juce::AudioProcessor
+class FreakiePieProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
     FreakiePieProcessor();
@@ -123,7 +129,7 @@ public:
     // the shelf in its first order (caught sounds stay)
     void resetToNormal();
     // Trixie's magic: one parameter, or every one she's allowed to touch, set at random. She leaves
-    // alone what would silence or stop things (the bypass, the snow and its fade times, the sound switches, the frozen
+    // alone what would silence or stop things (the bypass, the snow, the heat and their fade times, auto weather, the sound switches, the frozen
     // balloons' volume) and never buys anything at the store.
     static bool trixieMayTouch (const juce::String& paramID);
     static void randomise (juce::RangedAudioParameter&, juce::Random&);
@@ -146,6 +152,12 @@ public:
     std::atomic<uint32_t> popStruckRequest { 0 }; // the editor asks for these to go early (popped with the pin)
     std::atomic<float> thunderAmount { 0.0f }, cloudAmount { 0.0f }, bypassAmount { 0.0f };
     std::atomic<float> snowAmount { 0.0f };   // how frozen the output is (0..1)
+    std::atomic<float> heatAmount { 0.0f };   // how far the heatwave has come in (0..1)
+
+    // auto weather: while its switch is on, time passing (on the message thread) changes the sky
+    void autoWeatherStep (double seconds);
+    void keepSnowAndHeatApart();   // (on the message thread, once a second)
+    fp::AutoWeather::Spell autoWeatherSpell() const noexcept { return autoSky.current(); }
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
@@ -156,12 +168,20 @@ private:
     // grains on their way back into the effects: rendered after the chain, fed in on the next block
     juce::AudioBuffer<float> grainBuf, grainFifo;
     int grainFifoCount = 0;
+    juce::AudioBuffer<float> sfxBuf;   // the hiss and pops, before they go out or into the effects
+    float popsThruSm = 0.0f;
+    bool snowWasOn = false, heatWasOn = false;   // (the snow and the heat never fall together: see timerCallback)
     juce::AudioBuffer<float> scratch, chainIn;   // chainIn: the input plus the inflation tone, for the effect chain
     fp::Weather weather;
     fp::Leveler leveler;
     fp::PeakLimiter limiter;
     fp::MasterEq masterEq;
     fp::SnowFreeze snowFreeze;
+    fp::HeatWave heatWave;
+    fp::AutoWeather autoSky;
+    bool autoWasOn = false;
+    double lastTimerMs = 0.0;
+    void timerCallback() override;
     std::atomic<float>* p_stAmount = nullptr; std::atomic<float>* p_stBounce = nullptr;
     std::atomic<float>* p_stSway = nullptr;   std::atomic<float>* p_stCutup = nullptr;
 public:
@@ -169,12 +189,14 @@ public:
 private:
     std::atomic<float>* p_snow = nullptr;
     std::atomic<float>* p_snowIn = nullptr; std::atomic<float>* p_snowOut = nullptr;
+    std::atomic<float>* p_heat = nullptr; std::atomic<float>* p_autoWeather = nullptr;
     std::atomic<float>* p_rain = nullptr;
     std::atomic<float>* p_sgFreeze = nullptr;
     std::atomic<float>* p_grSize = nullptr;   std::atomic<float>* p_grDensity = nullptr; std::atomic<float>* p_grShape = nullptr;
     std::atomic<float>* p_grPan = nullptr;    std::atomic<float>* p_grReverse = nullptr;
     std::atomic<float>* p_grPos = nullptr;    std::atomic<float>* p_grPosRand = nullptr;
-    std::atomic<float>* p_toneOn = nullptr;
+    std::atomic<float>* p_popsThru = nullptr;
+    std::atomic<float>* p_heatIn = nullptr; std::atomic<float>* p_heatOut = nullptr;
     std::atomic<float>* p_catchFrom = nullptr;
     std::atomic<float>* p_balloonSfx = nullptr;
     std::atomic<float>* p_grainsThru = nullptr;

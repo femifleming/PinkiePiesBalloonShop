@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "PluginProcessor.h"
@@ -103,7 +104,7 @@ public:
     static void drawChalkCurve (juce::Graphics&, const std::function<float (float)>& f, juce::Rectangle<float> area, float thickness, float alpha);
     int page = 0;   // 0: the grain shape, 1: the master EQ
     void setPage (int p) { page = p; repaint(); }
-    juce::Point<float> floorSpot { 722.0f, 590.0f };   // where its feet stand when it's put away
+    juce::Point<float> floorSpot { 700.0f, 590.0f };   // where its feet stand when it's put away
 
 private:
     juce::Rectangle<float> boardArea() const;      // the board itself, in this component's coords (animated)
@@ -124,6 +125,159 @@ private:
 //==============================================================================
 // The library: the help. Twilight reads quietly in the corner while a big open book explains
 // the shop, one chapter per page. Chapters on the left page, the chapter itself on the right.
+//==============================================================================
+// The balloon store, as shelves in a little sweet shop: every effect is a balloon standing on a
+// wooden shelf, four to a shelf, all on screen at once. Point at one to read what it does;
+// click it to buy it (or pop it if it's yours). The ones you own wear a heart.
+class StoreShelves : public juce::Component
+{
+public:
+    explicit StoreShelves (FreakiePieEditor& e);
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
+    void mouseExit (const juce::MouseEvent&) override;
+    bool keyPressed (const juce::KeyPress&) override;
+    void open (juce::Rectangle<float> under);
+    void close();
+    bool isOpen() const noexcept { return opening; }
+    void step (float dt);   // the editor animates it
+    static constexpr int cols = 4, rows = 3;
+    static constexpr float W = 360.0f, H = 352.0f;
+    juce::Rectangle<float> tileArea (int i) const noexcept;   // i == StoreFX::kNum is the "pop all" tile
+    int tileAt (juce::Point<float>) const noexcept;
+private:
+    FreakiePieEditor& ed;
+    int hover = -1;
+    bool opening = false;
+    float shown = 0.0f, t = 0.0f;
+};
+
+//==============================================================================
+// The weather, in a row across the top where the title was: the sun and cloud (cloudy), the rain
+// cloud, the snowflake, the heatwave sun and the auto switch.
+// They're drawn the way they always were, straight onto the sky, but on their own layer above the
+// balloons so a click always reaches them.
+class WeatherBar : public juce::Component
+{
+public:
+    explicit WeatherBar (FreakiePieEditor& e);
+    void paint (juce::Graphics&) override;
+    bool hitTest (int x, int y) override;
+    void mouseDown (const juce::MouseEvent&) override;   // right-click the snow or the heat for their fade times
+    void step (float dt);
+    void toggle (int which);   // (the snow and the heatwave never fall together: one turns the other off)   // 0 cloudy, 1 rain, 2 snow, 3 heat, 4 auto
+    static constexpr float X = 290.0f, Y = 0.0f, W = 540.0f, H = 90.0f;
+    int buttonAt (juce::Point<float> contentPoint) const noexcept;
+private:
+    bool isOn (int which) const noexcept;
+    FreakiePieEditor& ed;
+};
+
+//==============================================================================
+// The order of the effects: a list down the left edge, top to bottom the way the sound goes
+// through them. It waits off the side of the window until the cursor comes near. Drag a pill up
+// or down to move that effect (the others make room, and the sound follows when you let go);
+// the die on top rolls a new order.
+class OrderRow : public juce::Component
+{
+public:
+    explicit OrderRow (FreakiePieEditor& e);
+    void paint (juce::Graphics&) override;
+    bool hitTest (int x, int y) override;
+    void mouseMove (const juce::MouseEvent&) override;
+    void mouseExit (const juce::MouseEvent&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void step (float dt, bool wanted);   // wanted: the cursor is near, so it slides in
+    static constexpr float X = 0.0f, Y = 128.0f, W = 150.0f, H = 462.0f;
+    static constexpr float left = 12.0f, top = 30.0f, pitch = 26.0f, chipH = 19.0f;
+    juce::Rectangle<float> dieArea() const noexcept { return { left, 4.0f, 20.0f, 20.0f }; }
+    juce::Rectangle<float> listArea() const noexcept;   // what's drawn, in the room's coordinates (where it is when shown)
+    bool isDragging() const noexcept { return dragSlot >= 0; }
+    float shownAmount() const noexcept { return shown; }
+    struct Chip { int slot; juce::String name; juce::Colour colour; juce::Rectangle<float> r; };
+    const std::vector<Chip>& layout() const;   // worked out again only when the order changes
+    std::vector<int> displayOrder() const;     // the order as shown (while dragging, with the dragged one at its new place)
+private:
+    std::vector<Chip> computeLayout() const;
+    int indexAt (float y) const noexcept;
+    mutable std::vector<int> layoutFor;
+    mutable std::vector<Chip> layoutCache;
+    FreakiePieEditor& ed;
+    std::map<int, float> shownY;   // where each pill is drawn, easing towards its place
+    int dragSlot = -1, dragTo = -1, hoverSlot = -1;
+    float grabDy = 0.0f, dragY = 0.0f, downY = 0.0f;
+    bool moved = false;
+    float shown = 0.0f, t = 0.0f, spin = 0.0f;
+    bool hoverDie = false;
+};
+
+//==============================================================================
+// Right-click the snowflake or the heatwave: a little card with its fade-in and fade-out times
+// (5 s to 5 min each). Drag along a bar or scroll on it; double-click puts it back to 5 s.
+class FadePopup : public juce::Component
+{
+public:
+    explicit FadePopup (FreakiePieEditor& e);
+    void open (int which, juce::Rectangle<float> under);   // 2 the snow, 3 the heatwave (the weather bar's numbering)
+    void close();
+    bool isOpen() const noexcept { return isVisible(); }
+    int showing() const noexcept { return isVisible() ? which : -1; }
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    bool keyPressed (const juce::KeyPress&) override;
+    static constexpr float W = 210.0f, H = 84.0f;
+    juce::Rectangle<float> trackArea (int row) const noexcept { return { 70.0f, 34.0f + 24.0f * (float) row, 84.0f, 10.0f }; }
+    juce::Rectangle<float> rowArea (int row) const noexcept { return { 8.0f, 28.0f + 24.0f * (float) row, W - 16.0f, 22.0f }; }
+    juce::RangedAudioParameter* params[2] {};
+private:
+    void setFromX (int row, float x);
+    FreakiePieEditor& ed;
+    int which = -1, dragRow = -1;
+};
+
+//==============================================================================
+// The presets as a filmstrip: it slides up from the bottom of the window with a picture of each
+// preset's place. Scroll or drag along it and click one to go there; the room fades over to it.
+// The kinds (start, feedback, stretch, useful) are chips above the strip that jump along it.
+class PresetStrip : public juce::Component
+{
+public:
+    explicit PresetStrip (FreakiePieEditor& e);
+    void paint (juce::Graphics&) override;
+    void mouseMove (const juce::MouseEvent&) override;
+    void mouseExit (const juce::MouseEvent&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    bool keyPressed (const juce::KeyPress&) override;
+    void open();
+    void close();
+    bool isOpen() const noexcept { return opening; }
+    void step (float dt);
+    static constexpr float H = 112.0f, frameW = 104.0f, frameH = 58.0f, gap = 10.0f, left = 14.0f, frameTop = 30.0f;
+    juce::Rectangle<float> frameArea (int i) const noexcept { return { left + (float) i * (frameW + gap) - scroll, frameTop, frameW, frameH }; }
+    juce::Rectangle<float> chipArea (int g) const noexcept;
+    juce::Rectangle<float> closeArea() const noexcept { return { (float) getWidth() - 28.0f, 6.0f, 20.0f, 20.0f }; }
+    int frameAt (juce::Point<float>) const noexcept;
+    void scrollTo (int preset);
+    static const char* const groups[4];
+private:
+    float maxScroll() const noexcept;
+    const juce::Image& thumb (int preset);
+    FreakiePieEditor& ed;
+    std::vector<juce::Image> thumbs;
+    bool opening = false, dragged = false;
+    float shown = 0.0f, scroll = 0.0f, scrollTarget = 0.0f, downScroll = 0.0f;
+    int hover = -1, pressed = -1;
+};
+
 class Library : public juce::Component
 {
 public:
@@ -385,12 +539,28 @@ private:
 
     bool rainOn() const noexcept   { return rainValue > 0.5f; }
     bool cloudyOn() const noexcept { return cloudyValue > 0.5f; }
+    bool heatOn() const noexcept   { return heatValue > 0.5f; }
+    bool autoOn() const noexcept   { return autoValue > 0.5f; }
     bool snowOn() const noexcept   { return snowValue > 0.5f; }
     bool bypassOn() const noexcept { return bypassValue > 0.5f; }
     bool bought (int fx) const;    // bought at the store (not just lent by the lightning)
     bool heliumOn() const noexcept { return heliumValue > 0.5f; }
 
     Content content { *this };
+    // a layer above the whole room (balloons, clouds, rain and all): the card, the order list, the
+    // store, the preset strip and the fade times. Clicks anywhere else fall through to the room.
+    struct Overlay : public juce::Component { Overlay() { setInterceptsMouseClicks (false, true); } };
+    Overlay overlay;
+    // the card itself (presets, scale, bypass), on the overlay
+    struct CardPanel : public juce::Component
+    {
+        explicit CardPanel (FreakiePieEditor& e) : ed (e) {}
+        void paint (juce::Graphics&) override;
+        void mouseDown (const juce::MouseEvent&) override;
+        FreakiePieEditor& ed;
+    };
+    std::unique_ptr<CardPanel> cardPanel;
+    void drawCard (juce::Graphics&) const;
     juce::OwnedArray<Floater> floaters;    // the 13 parameter balloons first, then sound balloons
     int numParamBalloons = 0;
     Balloon* freezeBalloon = nullptr;
@@ -401,7 +571,7 @@ private:
 
     // the shelf: the effects stand on it left to right in the order the sound goes through them.
     // Drag one along it and the rest make room; let go and the sound follows.
-    static constexpr float shelfLeft = 140.0f, shelfRight = 890.0f, shelfY = 440.0f;
+    static constexpr float shelfLeft = 140.0f, shelfRight = 890.0f, shelfY = 452.0f;   // (the row of effects, standing on the grass)
     static int anchorOfSlot (int slot) noexcept;   // fp::Engine::Slot -> anchor index
     std::vector<int> shelfItems() const;         // the slots standing on the shelf, in the processor's order
     void layoutShelf (const std::vector<int>& visibleOrder);
@@ -410,7 +580,7 @@ private:
     void drawGiftBox (juce::Graphics&, juce::Point<float> knot, int hue) const;
     Balloon* spectralFreezeBalloon = nullptr;
 
-    // little switches on the pumps (tone on/off, waveform, notes; what the sound pump catches)
+    // round toy switches: what the sound pump catches
     struct Pill
     {
         juce::Rectangle<float> r;
@@ -423,28 +593,25 @@ private:
         juce::Point<float> c;      // a round toy token with an animated picture of what it does
         float rad = 20.0f, bounce = 0.0f, bounceVel = 0.0f;
         int icon = 0;
-        bool inBubble = false;     // floats around inside the big clear balloon
-        juce::Point<float> local, lvel, home;
+        juce::Point<float> home;
         float phase = 0.0f;
     };
     enum TokenIcon { iconPops = 0, iconTone, iconCatch };
 
-    // the big clear balloon the tone controls float around in
-    juce::Point<float> bubbleHome { 168.0f, 252.0f }, bubblePos { 168.0f, 252.0f }, bubbleVel;
-    float bubbleRx = 96.0f, bubbleRy = 104.0f;
-    void bubbleStep (float dt);
-    void drawBubbleBack (juce::Graphics&) const;
-    void drawBubbleFront (juce::Graphics&) const;
+    void pillStep (float dt);   // the tokens bob gently where they are
+    // right-click the pop sounds token: switch them on or off, or send them into the effects
+    void openPopsMenu();
 
     // Pinkie, sitting on the floor watching the balloons; she hops when one pops
     // (under an umbrella when it rains, with the rain bouncing off it); she holds what you buy at the store
     juce::Image pinkie, pinkieUmbrella, pinkieCower, pinkieScared, pinkieSleep, pinkieCrystal;   // crystal: while the helium's on
+    juce::Image pinkieSnow, pinkieHeat, pinkieWet;   // bundled up in the snow; melted flat in the heat; soaked flat in a hot rain
     float pinkieHop = 0.0f, pinkieHopVel = 0.0f;
     // her moods: a pop scares her for a moment (two pictures, taking turns); leave the plugin
     // alone for a while and she falls asleep
     double scaredUntil = -1.0, lastActivity = 0.0;
     bool scaredAlt = false;
-    float scaredVis = 0.0f, sleepVis = 0.0f, umbrellaVis = 0.0f, crystalVis = 0.0f;
+    float scaredVis = 0.0f, sleepVis = 0.0f, umbrellaVis = 0.0f, crystalVis = 0.0f, snowyVis = 0.0f, meltVis = 0.0f, wetVis = 0.0f;
     static constexpr double sleepAfter = 45.0;
     void noteActivity() noexcept { lastActivity = clock; }
 
@@ -452,7 +619,15 @@ private:
     // interface colours following it
     int seenStutter = 0;     // the stutter's event counter, last time we looked
     double lastSave = 0.0;   // the last patch is saved every couple of seconds while you play
-    juce::ComboBox presetBox;
+    // the preset name in the card: it looks like the other boxes, but a click opens the filmstrip
+    struct PresetBox : public juce::ComboBox
+    {
+        std::function<void()> onOpen;
+        void mouseDown (const juce::MouseEvent&) override { if (onOpen) onOpen(); }
+        void mouseUp (const juce::MouseEvent&) override {}
+        void showPopup() override {}
+    };
+    PresetBox presetBox;
     int shownPreset = -2, bgFrom = -1, bgTo = -1;
     float bgFade = 1.0f;
     juce::Image backgrounds[presets::numBackgrounds];
@@ -469,7 +644,12 @@ private:
 
     // the library (help), opened with the little book under the rain cloud
     std::unique_ptr<Library> library;
-    juce::Rectangle<float> helpButton { 958.0f, 84.0f, 84.0f, 30.0f }, resetButton { 958.0f, 118.0f, 84.0f, 26.0f };
+    // the very top right corner, top to bottom: the pop sounds switch (right-click: feed them into the effects), help, reset
+    juce::Rectangle<float> popsButton { 950.0f, 3.0f, 108.0f, 22.0f };
+    juce::Rectangle<float> helpButton { 950.0f, 25.0f, 108.0f, 26.0f }, resetButton { 950.0f, 51.0f, 108.0f, 22.0f };
+    float popsValue = 1.0f;
+    std::unique_ptr<juce::ParameterAttachment> popsAtt;
+    void drawPopsButton (juce::Graphics&) const;
     void drawHelpButton (juce::Graphics&) const;
     void drawResetButton (juce::Graphics&) const;
     void resetEverything();
@@ -498,6 +678,26 @@ private:
     void drawTrixie (juce::Graphics&) const;
     juce::Path makeBolt (juce::Point<float> from, juce::Point<float> to, float jag);
     friend class Library;
+    friend class StoreShelves;
+    friend class WeatherBar;
+    friend class OrderRow;
+    friend class PresetStrip;
+    std::unique_ptr<PresetStrip> presetStrip;
+    std::unique_ptr<OrderRow> orderRow;
+    std::unique_ptr<WeatherBar> weatherBar;
+    std::unique_ptr<StoreShelves> storeShelves;
+
+    // the order of the effects (the list on the left): roll a new one, or set one dragged in the list
+    void rollOrder();
+    void setVisibleOrder (const std::vector<int>& visible);
+    std::unique_ptr<FadePopup> fadePopup;
+    friend class FadePopup;
+
+    // the card (presets, scale, bypass) waits above the top of the window until the cursor comes near
+    juce::Rectangle<int> cardHome { 16, 12, 252, 108 };
+    float cardShown = 0.0f;
+    void placeCard();
+    void revealStep (float dt);   // the card and the order list slide in when the cursor is near them
 
     StoreMenuLook storeLook;
     static constexpr float pinkieX = 262.0f;
@@ -507,7 +707,7 @@ private:
     bool umbrellaHit (juce::Point<float> p, juce::Point<float>& normal) const noexcept;
 
     // the balloon store: a sign at the top; what you buy comes as four balloons (its two controls, level, pan)
-    juce::Rectangle<float> storeSign { 824.0f, 10.0f, 112.0f, 64.0f };
+    juce::Rectangle<float> storeSign { 832.0f, 8.0f, 96.0f, 38.0f };   // just the board (no awning)
     Balloon* storeBalloons[fp::StoreFX::kNum][4] {};
     bool storeShown[fp::StoreFX::kNum] {};
     void openStore();
@@ -555,7 +755,7 @@ private:
     std::vector<SkyCloud> skyClouds;
     float cloudyValue = 0.0f, bypassValue = 0.0f, cloudVis = 0.0f, bypassVis = 0.0f;
     std::unique_ptr<juce::ParameterAttachment> cloudyAtt, bypassAtt;
-    juce::Rectangle<float> cloudyButton { 726.0f, 10.0f, 92.0f, 62.0f }, bypassButton;
+    juce::Rectangle<float> cloudyButton { 296.0f, 4.0f, 92.0f, 62.0f }, bypassButton;   // the weather, in a row across the top
 
     // snow: flakes drift down and pile up on the floor, the balloons ice over and stop moving
     // as the sound freezes (the look follows the audio's own freeze amount)
@@ -563,20 +763,22 @@ private:
     std::vector<Flake> flakes;
     float snowValue = 0.0f, snowVis = 0.0f, frozen = 0.0f, snowDepth = 0.0f, flakeBudget = 0.0f;
     std::unique_ptr<juce::ParameterAttachment> snowAtt;
-    juce::Rectangle<float> snowButton { 726.0f, 76.0f, 92.0f, 40.0f };
-    // the two fade times under the snowflake: drag up or down, or scroll; double-click for 5 s
-    struct SnowFade
-    {
-        juce::Rectangle<float> r;
-        juce::RangedAudioParameter* param = nullptr;
-        std::unique_ptr<juce::ParameterAttachment> att;
-        float value = 5.0f;
-        const char* word = "";
-    };
-    SnowFade snowFades[2];
-    SnowFade* dragFade = nullptr;
-    float fadeDragNorm = 0.0f, fadeDragY = 0.0f;
-    void drawSnowFades (juce::Graphics&) const;
+    juce::Rectangle<float> snowButton { 498.0f, 12.0f, 100.0f, 40.0f };
+    // (the snow's and the heat's fade times: right-click either one, see FadePopup)
+    void drawRainButton (juce::Graphics&) const;
+
+    // the heatwave: a sun with the air wobbling under it; the whole shop goes warm and shimmers
+    float heatValue = 0.0f, heatVis = 0.0f;
+    std::unique_ptr<juce::ParameterAttachment> heatAtt;
+    juce::Rectangle<float> heatButton { 604.0f, 12.0f, 110.0f, 40.0f };
+    void drawHeatButton (juce::Graphics&) const;
+    void drawHeatShimmer (juce::Graphics&, juce::Rectangle<float> full) const;
+
+    // auto weather: a little switch; while it's on the sky changes by itself every few minutes
+    float autoValue = 0.0f, autoVis = 0.0f;
+    std::unique_ptr<juce::ParameterAttachment> autoAtt;
+    juce::Rectangle<float> autoButton { 720.0f, 22.0f, 96.0f, 20.0f };
+    void drawAutoSwitch (juce::Graphics&) const;
     void snowStep (float dt);
     void drawSnowButton (juce::Graphics&) const;
     void drawSnowbank (juce::Graphics&) const;

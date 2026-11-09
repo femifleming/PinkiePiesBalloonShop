@@ -4,7 +4,7 @@
 
 A multi-effect you play as balloons. Every balloon is a control, and how full it is shows its value.
 
-The effects stand on a shelf, and your sound goes through them in the order you put them. The weather changes the sound too: rain softens it, clouds bring thunder and lightning, and snow freezes it solid. Pumps blow up plucked notes or catch sounds into frozen balloons, and a chalkboard lets you draw grain shapes and a master EQ. Every so often the Great and Powerful Trixie drops by.
+Your sound goes through the effects in the order you set: move the cursor to the left edge and the order list slides out, then drag the effects up or down. The weather changes the sound too: rain softens it, clouds bring thunder and lightning, snow freezes it solid and a heatwave melts it into a slow smear (right-click the snow or the heatwave to set how slowly they come and go). Pumps blow up plucked notes or catch sounds into frozen balloons, and a chalkboard lets you draw grain shapes and a master EQ. The preset and scale card waits above the top left corner until you reach for it, and every so often the Great and Powerful Trixie drops by.
 
 - macOS: Audio Unit, VST3 and a standalone app
 - Windows: VST3 and a standalone app
@@ -12,7 +12,7 @@ The effects stand on a shelf, and your sound goes through them in the order you 
 
 ![Pinkie Pie's Balloon Shop](docs/screenshot.jpg)
 
-**[How to use it: the full help page](docs/HELP.md)** (the same guide is in the plug-in's library: click the purple book under the rain cloud).
+**[How to use it: the full help page](docs/HELP.md)** (the same guide is in the plug-in's library: click **help** in the top right corner).
 
 ## Download
 
@@ -87,7 +87,7 @@ The tests (`-DBALLOONSHOP_BUILD_TESTS=ON`) check the sound and drive the whole i
 ## Credits and notes
 
 - This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators.
-- The ten balloon-store effects are rebuilt from Olivier Bélanger's SoundGrain.
+- The balloon-store effects are rebuilt from Olivier Bélanger's SoundGrain (the phaser replaces its flanger).
 - The gumball machine, the ring mod and the bouncing plucks take their ideas from Alexander Mesker's thesis *Analysis and recreation of key features in selected Autechre tracks from 1998-2005* (Macquarie University, 2007).
 - Built with [JUCE](https://juce.com).
 

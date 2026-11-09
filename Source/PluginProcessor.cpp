@@ -58,10 +58,13 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::helium, 1 }, "Helium", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::cloudy, 1 }, "Cloudy", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::snow, 1 }, "Snow", false));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::heat, 1 }, "Heatwave", false));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::autoWeather, 1 }, "Auto Weather", false));
     {
         // 5 s to 5 min; the middle of the range sits at 30 s so the short times are easy to set
         auto secs = [] (float v, int) { return snowFadeText (v); };
-        for (auto [id, name] : { std::pair { ids::snowIn, "Snow Fade In" }, std::pair { ids::snowOut, "Snow Fade Out" } })
+        for (auto [id, name] : { std::pair { ids::snowIn, "Snow Fade In" }, std::pair { ids::snowOut, "Snow Fade Out" },
+                                 std::pair { ids::heatIn, "Heatwave Fade In" }, std::pair { ids::heatOut, "Heatwave Fade Out" } })
         {
             NormalisableRange<float> r (5.0f, 300.0f);
             r.setSkewForCentre (30.0f);
@@ -96,9 +99,9 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
     mixParam (ids::grPosRand, "Grain Position Random", 1.0f);
 
     // the inflation tone, and what the sound pump catches
-    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::toneOn, 1 }, "Tone On", true));
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ids::catchFrom, 1 }, "Catch From", StringArray { "effects", "input" }, 0));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::balloonSfx, 1 }, "Balloon Sounds", true));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::popsThru, 1 }, "Pop Sounds Through FX", false));
     layout.add (std::make_unique<F> (ParameterID { ids::grainsThru, 1 }, "Frozen Grains Through FX", NormalisableRange<float> (0.0f, 1.0f), 0.0f,
                                      A().withStringFromValueFunction ([] (float v, int)
                                      {
@@ -170,13 +173,15 @@ FreakiePieProcessor::FreakiePieProcessor()
     p_grainsLevel = get (ids::grainsLevel);
     p_snow = get (ids::snow);
     p_snowIn = get (ids::snowIn); p_snowOut = get (ids::snowOut);
+    p_heat = get (ids::heat); p_autoWeather = get (ids::autoWeather);
     p_stAmount = get (ids::stAmount); p_stBounce = get (ids::stBounce);
     p_stSway = get (ids::stSway);     p_stCutup = get (ids::stCutup);
     p_sgFreeze = get (ids::sgFreeze);
     p_grSize = get (ids::grSize);      p_grDensity = get (ids::grDensity); p_grShape = get (ids::grShape);
     p_grPan = get (ids::grPan);        p_grReverse = get (ids::grReverse);
     p_grPos = get (ids::grPos);        p_grPosRand = get (ids::grPosRand);
-    p_toneOn = get (ids::toneOn);
+    p_popsThru = get (ids::popsThru);
+    p_heatIn = get (ids::heatIn); p_heatOut = get (ids::heatOut);
     p_catchFrom = get (ids::catchFrom);
     p_balloonSfx = get (ids::balloonSfx);
     p_grainsThru = get (ids::grainsThru);
@@ -188,15 +193,19 @@ FreakiePieProcessor::FreakiePieProcessor()
     setShelfOrder (fp::Engine::defaultOrder());
     balloonFX.chalk = &chalk;
 
+    setCurrentProgram (0);   // a fresh one opens on the default patch
+
     // start where you left off
     if (rememberLastState)
         if (auto xml = parseXML (lastStateFile()))
             if (xml->hasTagName (apvts.state.getType()))
                 loadStateXml (*xml);
+    startTimer (1000);   // auto weather ticks once a second
 }
 
 FreakiePieProcessor::~FreakiePieProcessor()
 {
+    stopTimer();
     if (MessageManager::existsAndIsCurrentThread()) saveLastState();
 }
 
@@ -310,6 +319,7 @@ void FreakiePieProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     limiter.prepare (sampleRate);
     masterEq.prepare (sampleRate);
     snowFreeze.prepare (sampleRate);
+    heatWave.prepare (sampleRate);
     trixieNoise.prepare (sampleRate);
     stutter.prepare (sampleRate);
     thruSm = p_grainsThru->load();
@@ -321,6 +331,8 @@ void FreakiePieProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     scratch.setSize (2, std::max (1, samplesPerBlock), false, true, true);
     chainIn.setSize (2, std::max (1, samplesPerBlock), false, true, true);
     grainBuf.setSize (2, std::max (1, samplesPerBlock), false, true, true);
+    sfxBuf.setSize (2, std::max (1, samplesPerBlock), false, true, true);
+    popsThruSm = p_popsThru->load() > 0.5f ? 1.0f : 0.0f;
     grainFifo.setSize (2, std::max (8192, 4 * samplesPerBlock));
     grainFifo.clear();
     grainFifoCount = 0;
@@ -376,6 +388,8 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         chainIn.setSize (2, n, false, true, true);
     if (grainBuf.getNumSamples() < n)
         grainBuf.setSize (2, n, false, true, true);
+    if (sfxBuf.getNumSamples() < n)
+        sfxBuf.setSize (2, n, false, true, true);
 
     engine.setParams (readParams());
 
@@ -392,8 +406,27 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     {
         const auto& scales = fp::getScales();
         const auto& sc = scales[(size_t) juce::jlimit (0, (int) scales.size() - 1, (int) p_psScale->load())];
-        balloonFX.addInflationTone (cL, cR, n, sc, p_toneOn->load() > 0.5f);
+        balloonFX.addInflationTone (cL, cR, n, sc);   // (the plucks are always on)
         trixieNoise.process (cL, cR, n);   // Trixie's noise, when she's playing one, goes in with your sound
+    }
+    // the hiss and pops: straight out (added after the effects, below) or into the effects with your
+    // sound, crossfading over ~50 ms when you change it
+    balloonFX.sfxOn = p_balloonSfx->load() > 0.5f;
+    float* sL = sfxBuf.getWritePointer (0);
+    float* sR = sfxBuf.getWritePointer (1);
+    balloonFX.renderSfx (sL, sR, n);
+    {
+        const float target = p_popsThru->load() > 0.5f ? 1.0f : 0.0f;
+        const float k = 1.0f - std::exp (-1.0f / (0.015f * (float) getSampleRate()));
+        for (int i = 0; i < n; ++i)
+        {
+            popsThruSm += k * (target - popsThruSm);
+            cL[i] += popsThruSm * sL[i];
+            cR[i] += popsThruSm * sR[i];
+            sL[i] *= 1.0f - popsThruSm;   // what's left goes straight out
+            sR[i] *= 1.0f - popsThruSm;
+        }
+        if (std::abs (target - popsThruSm) < 1.0e-5f) popsThruSm = target;
     }
     // the frozen balloons' grains from the last block, back in through the effects
     if (grainFifoCount > 0)
@@ -489,8 +522,9 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
             std::copy (oR, oR + n, cR);
             recL = cL; recR = cR;
         }
-        balloonFX.sfxOn = p_balloonSfx->load() > 0.5f;
-        // pops, air hiss, frozen sound balloons; the grains come out separately so the canister can send them
+        FloatVectorOperations::add (oL, sL, n);   // the hiss and pops that go straight out
+        FloatVectorOperations::add (oR, sR, n);
+        // frozen sound balloons; the grains come out separately so the canister can send them
         // straight out or round again (into the fifo, to join the effects' input next block), crossfading smoothly
         grainBuf.clear (0, n);
         float* gL = grainBuf.getWritePointer (0);
@@ -527,6 +561,9 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     cloudAmount.store (weather.getClouds());
     thunderAmount.store (weather.getThunder());
 
+    heatWave.setFadeTimes (p_heatIn->load(), p_heatOut->load());
+    heatWave.process (oL, oR, n, p_heat->load() > 0.5f);   // heat: a slow smear (the snow can still freeze it)
+    heatAmount.store (heatWave.getAmount());
     snowFreeze.setFadeTimes (p_snowIn->load(), p_snowOut->load());
     snowFreeze.process (oL, oR, n, p_snow->load() > 0.5f);   // snow: everything freezes, then the EQ still shapes it
     snowAmount.store (snowFreeze.getAmount());
@@ -616,7 +653,7 @@ void FreakiePieProcessor::resetToNormal()
 
 bool FreakiePieProcessor::trixieMayTouch (const String& id)
 {
-    for (auto* no : { ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::toneOn, ids::balloonSfx, ids::grainsLevel, ids::catchFrom })
+    for (auto* no : { ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::heat, ids::heatIn, ids::heatOut, ids::autoWeather, ids::balloonSfx, ids::popsThru, ids::grainsLevel, ids::catchFrom })
         if (id == no) return false;
     return ! id.endsWith ("Owned");
 }
@@ -664,3 +701,63 @@ FreakiePieProcessor::Order FreakiePieProcessor::getShelfOrder() const
 }
 
 AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new FreakiePieProcessor(); }
+
+//==============================================================================
+// auto weather, on the message thread: once a second, let the sky move on
+void FreakiePieProcessor::timerCallback()
+{
+    const double now = Time::getMillisecondCounterHiRes();
+    const double dt = lastTimerMs > 0.0 ? jlimit (0.0, 5.0, (now - lastTimerMs) * 0.001) : 0.0;
+    lastTimerMs = now;
+    keepSnowAndHeatApart();
+    autoWeatherStep (dt);
+}
+
+// The snow and the heatwave never fall together: whichever came on last stays, and the other
+// goes off (a session, a preset or host automation could ask for both; the switches don't).
+void FreakiePieProcessor::keepSnowAndHeatApart()
+{
+    const bool snowOn = p_snow->load() > 0.5f, heatOn = p_heat->load() > 0.5f;
+    if (snowOn && heatOn)
+    {
+        const char* off = ! heatWasOn ? ids::snow : ids::heat;   // the one that was already on gives way
+        if (auto* prm = apvts.getParameter (off))
+        {
+            prm->beginChangeGesture();
+            prm->setValueNotifyingHost (0.0f);
+            prm->endChangeGesture();
+        }
+        snowWasOn = off != ids::snow;
+        heatWasOn = off != ids::heat;
+        return;
+    }
+    snowWasOn = snowOn;
+    heatWasOn = heatOn;
+}
+
+void FreakiePieProcessor::autoWeatherStep (double seconds)
+{
+    const bool on = p_autoWeather->load() > 0.5f;
+    auto sw = [this] (const char* id) { return apvts.getRawParameterValue (id)->load() > 0.5f; };
+    if (! on) { autoWasOn = false; return; }
+    if (! autoWasOn)
+    {
+        autoWasOn = true;
+        autoSky.seed ((uint64_t) Time::currentTimeMillis());
+        autoSky.start ({ sw (ids::rain), sw (ids::cloudy), sw (ids::snow), sw (ids::heat) });
+        return;
+    }
+    if (! autoSky.step (seconds)) return;
+    const auto k = autoSky.sky();
+    auto set = [this] (const char* id, bool v)
+    {
+        if (auto* prm = apvts.getParameter (id))
+            if ((prm->getValue() > 0.5f) != v)
+            {
+                prm->beginChangeGesture();
+                prm->setValueNotifyingHost (v ? 1.0f : 0.0f);
+                prm->endChangeGesture();
+            }
+    };
+    set (ids::rain, k.rain); set (ids::cloudy, k.cloudy); set (ids::snow, k.snow); set (ids::heat, k.heat);
+}

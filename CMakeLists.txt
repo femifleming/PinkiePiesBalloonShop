@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Universal binary")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS")
 
-project(PinkiePiesBalloonShop VERSION 1.0.2 LANGUAGES C CXX)
+project(PinkiePiesBalloonShop VERSION 1.0.3 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -23,7 +23,7 @@ else()
 endif()
 
 juce_add_plugin(BalloonShop
-    VERSION 1.0.2
+    VERSION 1.0.3
     COMPANY_NAME "FreakiePie"
     COMPANY_WEBSITE "https://github.com/femifleming/PinkiePiesBalloonShop"
     BUNDLE_ID "com.freakiepie.freakiepie"
@@ -56,6 +56,7 @@ file(GLOB BS_BACKGROUNDS ${CMAKE_CURRENT_SOURCE_DIR}/Resources/bg_*.jpg)
 juce_add_binary_data(BalloonShopAssets SOURCES
     Resources/pinkie_sitting.png Resources/pinkie_umbrella.png Resources/pinkie_crystal.png Resources/cheerilee.png
     Resources/pinkie_cower.png Resources/pinkie_scared.png Resources/pinkie_sleep.png
+    Resources/pinkie_snow.png Resources/pinkie_heat.png Resources/pinkie_wet.png
     Resources/library.jpg Resources/twilight_reading.png Resources/trixie.png Resources/mlp_magic_is_friendship.ttf
     ${BS_BACKGROUNDS})
 

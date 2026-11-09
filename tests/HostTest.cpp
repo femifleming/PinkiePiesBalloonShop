@@ -60,6 +60,44 @@ struct FreakieTestAccess
     static int backgroundShown (FreakiePieEditor& e) { return e.bgTo; }
     static void showPresetMenu (FreakiePieEditor& e) { e.presetBox.showPopup(); }
     static void showStore (FreakiePieEditor& e) { e.openStore(); }
+    static StoreShelves& shelves (FreakiePieEditor& e) { return *e.storeShelves; }
+    static bool bought (FreakiePieEditor& e, int fx) { return e.bought (fx); }
+    static std::vector<int> shelfItems (FreakiePieEditor& e) { return e.shelfItems(); }
+    static void roll (FreakiePieEditor& e) { e.rollOrder(); }
+    static void asTheyWere (FreakiePieEditor& e) { auto v = e.shelfItems(); std::sort (v.begin(), v.end()); e.setVisibleOrder (v); }
+    static OrderRow& orderList (FreakiePieEditor& e) { return *e.orderRow; }
+    static void showOrder (FreakiePieEditor& e) { e.orderRow->step (1.0f, true); }   // as if the cursor came to the left edge
+    static void showCard (FreakiePieEditor& e, bool on) { e.cardShown = on ? 1.0f : 0.0f; e.placeCard(); }
+    static Rectangle<int> card (FreakiePieEditor& e) { return e.infoCard; }
+    static FadePopup& fades (FreakiePieEditor& e) { return *e.fadePopup; }
+    static float wetVis (FreakiePieEditor& e) { return e.wetVis; }
+    static float umbrellaVis (FreakiePieEditor& e) { return e.umbrellaVis; }
+    static Rectangle<float> helpButton (FreakiePieEditor& e) { return e.helpButton; }
+    static Rectangle<float> storeSign (FreakiePieEditor& e) { return e.storeSign; }
+    static int numPills (FreakiePieEditor& e) { return e.pills.size(); }
+    static Rectangle<float> popsButton (FreakiePieEditor& e) { return e.popsButton; }
+    static Component& overlay (FreakiePieEditor& e) { return e.overlay; }
+    static Rectangle<float> chalkRest (FreakiePieEditor& e) { return e.chalkboard->restArea(); }
+    static Point<float> pinHome (FreakiePieEditor& e) { return e.pin->home; }
+
+    static Point<float> pillAt (FreakiePieEditor& e, const char* id)
+    {
+        for (auto* pl : e.pills) if (pl->param == e.proc.apvts.getParameter (id)) return pl->home;
+        return { -1.0f, -1.0f };
+    }
+    // a right-click on the weather row
+    static void rightClick (Component& c, Point<float> local)
+    {
+        MouseEvent me (Desktop::getInstance().getMainMouseSource(), local, ModifierKeys (ModifierKeys::rightButtonModifier), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, Time(), local, Time(), 1, false);
+        c.mouseDown (me); c.mouseUp (me);
+    }
+    static void drag (Component& c, Point<float> from, Point<float> to)
+    {
+        auto ev = [&] (Point<float> q, bool dragging) { return MouseEvent (Desktop::getInstance().getMainMouseSource(), q, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, Time(), from, Time(), 1, dragging); };
+        c.mouseDown (ev (from, false));
+        for (int k = 1; k <= 10; ++k) c.mouseDrag (ev (from + (to - from) * ((float) k / 10.0f), true));
+        c.mouseUp (ev (to, true));
+    }
     static void chalkHover (FreakiePieEditor& e, float u, float v)
     {
         auto& c = *e.chalkboard;
@@ -164,10 +202,37 @@ struct FreakieTestAccess
     static float cloudVis (FreakiePieEditor& e) { return e.cloudVis; }
     static float flash (FreakiePieEditor& e) { return e.flash; }
     static uint32_t lent (FreakiePieEditor& e) { return e.lentShown; }
-    static bool clickAt (FreakiePieEditor& e, Rectangle<float> r) { mouse (e, r.getCentre(), 0); mouse (e, r.getCentre(), 2); return true; }
+    // a click goes to whatever is on top there: the weather row, the order row, or else the room itself
+    static void press (Component& c, Point<float> local, int clicks = 1)
+    {
+        MouseEvent me (Desktop::getInstance().getMainMouseSource(), local, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, Time(), local, Time(), clicks, false);
+        c.mouseDown (me); c.mouseUp (me);
+    }
+    static bool clickAt (FreakiePieEditor& e, Rectangle<float> r)
+    {
+        const auto p = r.getCentre();
+        for (Component* c : { (Component*) e.presetStrip.get(), (Component*) e.cardPanel.get(), (Component*) e.fadePopup.get(), (Component*) e.orderRow.get(), (Component*) e.weatherBar.get() })
+            if (c != nullptr && c->isVisible() && c->getBounds().toFloat().contains (p)
+                && c->hitTest ((int) (p.x - (float) c->getX()), (int) (p.y - (float) c->getY())))
+            {
+                press (*c, p - c->getPosition().toFloat());
+                return true;
+            }
+        mouse (e, p, 0); mouse (e, p, 2);
+        return true;
+    }
+    static Rectangle<float> rainButton (FreakiePieEditor& e) { return e.cloudButton; }
+    static Component& content (FreakiePieEditor& e) { return e.content; }
+    static Component& weatherRow (FreakiePieEditor& e) { return *e.weatherBar; }
+    static Rectangle<float> orderDie (FreakiePieEditor& e) { return e.orderRow->dieArea() + e.orderRow->getPosition().toFloat(); }
+    static PresetStrip& strip (FreakiePieEditor& e) { return *e.presetStrip; }
+    static Component& presetBox (FreakiePieEditor& e) { return e.presetBox; }
     static Rectangle<float> cloudyButton (FreakiePieEditor& e) { return e.cloudyButton; }
     static Rectangle<float> bypassButton (FreakiePieEditor& e) { return e.bypassButton; }
     static Rectangle<float> snowButton (FreakiePieEditor& e) { return e.snowButton; }
+    static Rectangle<float> heatButton (FreakiePieEditor& e) { return e.heatButton; }
+    static Rectangle<float> autoButton (FreakiePieEditor& e) { return e.autoButton; }
+    static float meltVis (FreakiePieEditor& e) { return e.meltVis; }
     static int flakes (FreakiePieEditor& e) { return (int) e.flakes.size(); }
     // find a parameter balloon by its label
     static Balloon* byLabel (FreakiePieEditor& e, const String& label)
@@ -184,20 +249,6 @@ struct FreakieTestAccess
     }
     static void openBubble (FreakiePieEditor& e, SoundBalloon* sb) { e.showPitchBubble (sb); e.pitchBubble->field.setText ("+12", false); }
     static void closeBubble (FreakiePieEditor& e) { e.pitchBubble->close(); }
-    // where the bubble's tokens are, and whether each sits inside the bubble's walls
-    static std::vector<juce::Point<float>> bubbleTokens (FreakiePieEditor& e, bool& allInside)
-    {
-        std::vector<juce::Point<float>> out;
-        allInside = true;
-        for (auto* pl : e.pills)
-            if (pl->inBubble)
-            {
-                out.push_back (pl->c);
-                const auto d = pl->c - e.bubblePos;
-                if ((d.x * d.x) / (e.bubbleRx * e.bubbleRx) + (d.y * d.y) / (e.bubbleRy * e.bubbleRy) > 1.0f) allInside = false;
-            }
-        return out;
-    }
     static float pinHomeDistance (FreakiePieEditor& e) { return e.pin->pos.getDistanceFrom (e.pin->home); }
     static SoundBalloon* firstSound (FreakiePieEditor& e)
     {
@@ -221,6 +272,7 @@ struct FreakieTestAccess
 
 int main (int argc, char** argv)
 {
+    std::setvbuf (stdout, nullptr, _IOLBF, 0);   // one line at a time, so a long run shows where it is
     ScopedJuceInitialiser_GUI init;
     int fails = 0;
     FreakiePieProcessor::rememberLastState = false;   // start every test instance from the defaults
@@ -746,6 +798,120 @@ int main (int argc, char** argv)
             if (inText != "1 min" || outText != "5 min" || std::abs (in30 - 0.5f) > 0.005f || in61 < 1.0f || std::abs (out30 - 0.9f) > 0.005f
                 || std::abs (afterChange - out30) > 0.01f || out35 > 0.0f) FAIL_HERE();
         }
+        // heatwave: the sound smears and drifts. A 440 Hz tone is held; when the input moves to 660 Hz
+        // the 440 lingers for seconds and the 660 creeps in; the level stays near the input's; switched
+        // off it fades over 5 s and the output is untouched again
+        {
+            FreakiePieProcessor q;
+            q.setPlayConfigDetails (2, 2, 48000, 256);
+            q.prepareToPlay (48000, 256);
+            for (auto* id : { ids::sgMix, ids::psMix, ids::grMix, ids::rvMix, ids::masterFb, ids::psFeedback })
+                *q.apvts.getRawParameterValue (id) = 0.0f;
+            DelayMatch dq (q.getLatencySamples());
+            double ph3 = 0.0, f = 440.0, err = 0.0;
+            std::vector<float> out;
+            auto go = [&] (double sec)
+            {
+                out.clear(); err = 0.0;
+                for (int b = 0; b < (int) (sec * 48000 / 256); ++b)
+                {
+                    std::vector<float> in (256);
+                    for (int i = 0; i < 256; ++i) { in[(size_t) i] = 0.1f * (float) std::sin (ph3); ph3 += fp::kTwoPi * f / 48000.0; buf.setSample (0, i, in[(size_t) i]); buf.setSample (1, i, in[(size_t) i]); }
+                    q.processBlock (buf, m);
+                    for (int i = 0; i < 256; ++i) { out.push_back (buf.getSample (0, i)); err = jmax (err, (double) std::abs (buf.getSample (0, i) - dq.push (in[(size_t) i]))); }
+                }
+            };
+            auto lev = [&] (double hzz)
+            {
+                double re = 0, im = 0;
+                const size_t n = std::min<size_t> (out.size(), 24000), off = out.size() - n;
+                for (size_t i = 0; i < n; ++i)
+                {
+                    const double w = 0.5 - 0.5 * std::cos (fp::kTwoPi * (double) i / (double) (n - 1));
+                    re += w * out[off + i] * std::cos (fp::kTwoPi * hzz * (double) i / 48000.0);
+                    im += w * out[off + i] * std::sin (fp::kTwoPi * hzz * (double) i / 48000.0);
+                }
+                return 4.0 * std::sqrt (re * re + im * im) / (double) n;
+            };
+            auto rms = [&]() { double ss = 0; const size_t n = std::min<size_t> (out.size(), 48000); for (size_t i = out.size() - n; i < out.size(); ++i) ss += out[i] * out[i]; return std::sqrt (ss / (double) n) / 0.0707; };
+            go (1.0);
+            *q.apvts.getRawParameterValue (ids::heat) = 1.0f;
+            go (8.0);
+            const double steady = rms();
+            const float amt = q.heatAmount.load();
+            f = 660.0;
+            go (2.0);
+            const double old2 = lev (440.0), new2 = lev (660.0);
+            go (20.0);
+            const double old22 = lev (440.0), new22 = lev (660.0);
+            *q.apvts.getRawParameterValue (ids::heat) = 0.0f;
+            go (6.0);
+            go (1.0);
+            std::printf ("heatwave: in %.2f, level %.0f %% of the input; 2 s after 440 -> 660 Hz: 440 at %.3f, 660 at %.3f; 22 s after: 440 at %.3f, 660 at %.3f; "
+                         "off again: max diff %g\n", amt, 100.0 * steady, old2, new2, old22, new22, err);
+            // and noise comes out as loud as it goes in, too
+            Random nr (7);
+            double nin = 0.0, nout = 0.0;
+            *q.apvts.getRawParameterValue (ids::heat) = 1.0f;
+            for (int b = 0; b < (int) (16.0 * 48000 / 256); ++b)
+            {
+                for (int i = 0; i < 256; ++i) { const float v = 0.1f * (nr.nextFloat() * 2.0f - 1.0f); buf.setSample (0, i, v); buf.setSample (1, i, v); if (b > 10 * 48000 / 256) nin += v * v; }
+                q.processBlock (buf, m);
+                if (b > 10 * 48000 / 256) for (int i = 0; i < 256; ++i) nout += buf.getSample (0, i) * buf.getSample (0, i);
+            }
+            const double noiseLevel = std::sqrt (nout / nin);
+            std::printf ("heatwave on noise: %.0f %% of the input (the gentle lowpass takes a little of the top)\n", 100.0 * noiseLevel);
+            if (noiseLevel < 0.6 || noiseLevel > 1.3) FAIL_HERE();
+            if (amt < 1.0f || steady < 0.75 || steady > 1.3 || old2 < new2 || old2 < 0.03 || new22 < 4.0 * old22 || err != 0.0) FAIL_HERE();
+        }
+        // auto weather: ten simulated days of sky. Every spell turns up, each lasts minutes, and the
+        // sky only moves to a neighbour (never heat straight to snow or snow to heat)
+        {
+            fp::AutoWeather aw;
+            aw.seed (99);
+            aw.start ({});
+            int changes = 0, heatToSnow = 0, firstAt = -1;
+            int seen[fp::AutoWeather::numSpells] = {};
+            auto prev = aw.current();
+            double t = 0.0;
+            for (int s = 0; s < 10 * 24 * 3600; ++s)
+            {
+                t += 1.0;
+                if (aw.step (1.0))
+                {
+                    if (firstAt < 0) firstAt = (int) t;
+                    const auto now = aw.current();
+                    if ((prev == fp::AutoWeather::heat && now == fp::AutoWeather::snow) || (prev == fp::AutoWeather::snow && now == fp::AutoWeather::heat)) ++heatToSnow;
+                    ++seen[(int) now]; ++changes; prev = now;
+                }
+            }
+            const double meanMin = t / 60.0 / jmax (1, changes);
+            int kinds = 0; for (int k : seen) kinds += k > 0 ? 1 : 0;
+            std::printf ("auto weather: first change after %d s, %d changes in 10 days (a spell every %.1f min on average), %d of 6 kinds, heat<->snow jumps %d\n",
+                         firstAt, changes, meanMin, kinds, heatToSnow);
+            if (firstAt < 30 || firstAt > 91 || meanMin < 3.0 || meanMin > 10.0 || kinds != 6 || heatToSnow != 0) FAIL_HERE();
+        }
+        // auto weather in the plug-in: switched on, time passing moves the switches; switched off, it leaves them
+        {
+            FreakiePieProcessor q;
+            q.apvts.getParameter (ids::autoWeather)->setValueNotifyingHost (1.0f);
+            q.autoWeatherStep (0.0);
+            int flips = 0;
+            bool last[4] = {};
+            for (int s = 0; s < 4 * 3600; ++s)
+            {
+                q.autoWeatherStep (1.0);
+                const bool now[4] = { *q.apvts.getRawParameterValue (ids::rain) > 0.5f, *q.apvts.getRawParameterValue (ids::cloudy) > 0.5f,
+                                      *q.apvts.getRawParameterValue (ids::snow) > 0.5f, *q.apvts.getRawParameterValue (ids::heat) > 0.5f };
+                for (int k = 0; k < 4; ++k) { if (now[k] != last[k]) ++flips; last[k] = now[k]; }
+            }
+            q.apvts.getParameter (ids::autoWeather)->setValueNotifyingHost (0.0f);
+            const float before = *q.apvts.getRawParameterValue (ids::rain) + 2 * *q.apvts.getRawParameterValue (ids::cloudy) + 4 * *q.apvts.getRawParameterValue (ids::snow) + 8 * *q.apvts.getRawParameterValue (ids::heat);
+            for (int s = 0; s < 3600; ++s) q.autoWeatherStep (1.0);
+            const float after = *q.apvts.getRawParameterValue (ids::rain) + 2 * *q.apvts.getRawParameterValue (ids::cloudy) + 4 * *q.apvts.getRawParameterValue (ids::snow) + 8 * *q.apvts.getRawParameterValue (ids::heat);
+            std::printf ("auto weather in the plug-in: %d switch changes over 4 hours; off for an hour: sky %s\n", flips, before == after ? "left alone" : "CHANGED");
+            if (flips < 20 || before != after) FAIL_HERE();
+        }
         // the way in stays smooth: no dip while the snow builds (a slow crossfade against the late resynthesis would cancel)
         {
             FreakiePieProcessor q;
@@ -1263,15 +1429,14 @@ int main (int argc, char** argv)
             run (1.0, 0, 0, rms, peak);
         }
 
-        // tone off: pumping makes only the air hiss (no pitched tone in the chain)
-        *p.apvts.getRawParameterValue (ids::toneOn) = 0.0f;
+        // the plucks are always on now: pumping with the pop sounds off still plays notes
+        *p.apvts.getRawParameterValue (ids::balloonSfx) = 0.0f;
         fx.pumping = true; fx.pumpSize = 0.5f;
-        run (0.5, 0, 0, rms, peak);
-        const double hissOnly = rms;
-        *p.apvts.getRawParameterValue (ids::toneOn) = 1.0f;
-        run (0.5, 0, 0, rms, peak);
-        std::printf ("pumping with the tone off rms %.3f, on rms %.3f\n", hissOnly, rms);
-        if (! (rms > hissOnly * 1.3)) FAIL_HERE();
+        run (1.5, 0, 0, rms, peak);
+        std::printf ("pumping with the pop sounds off (plucks only) rms %.3f\n", rms);
+        if (! (rms > 0.005)) FAIL_HERE();
+        *p.apvts.getRawParameterValue (ids::balloonSfx) = 1.0f;
+        fx.pumping = false; run (4.0, 0, 0, rms, peak);
         // the plucks: slow and irregular, every note in the scale, panned around, ringing out after you let go
         {
             *p.apvts.getRawParameterValue (ids::balloonSfx) = 0.0f;     // hiss off, so we hear only the plucks
@@ -1306,17 +1471,37 @@ int main (int argc, char** argv)
             *p.apvts.getRawParameterValue (ids::balloonSfx) = 1.0f;
         }
 
-        // balloon sounds off (and the tone off): pumping and popping make no sound at all
+        // balloon sounds off: a pop makes no sound at all
         *p.apvts.getRawParameterValue (ids::balloonSfx) = 0.0f;
-        *p.apvts.getRawParameterValue (ids::toneOn) = 0.0f;
         run (0.3, 0, 0, rms, peak);
         fx.popSize = 1.0f; ++fx.popRequests;
         run (0.5, 0, 0, rms, peak);
-        std::printf ("balloon sounds off: pumping + a pop peak %.6f\n", peak);
+        std::printf ("balloon sounds off: a pop peak %.6f\n", peak);
         if (peak > 1e-6) FAIL_HERE();
         *p.apvts.getRawParameterValue (ids::balloonSfx) = 1.0f;
-        *p.apvts.getRawParameterValue (ids::toneOn) = 1.0f;
         fx.pumping = false; run (0.2, 0, 0, rms, peak);
+
+        // pop sounds fed into the effects: with a long reverb the pop rings on well after it's over;
+        // straight out (the default) the reverb never hears it
+        {
+            *p.apvts.getRawParameterValue (ids::rvMix) = 1.0f;
+            *p.apvts.getRawParameterValue (ids::rvDecay) = p.apvts.getParameterRange (ids::rvDecay).end;
+            auto tailAfterPop = [&] (bool thru)
+            {
+                *p.apvts.getRawParameterValue (ids::popsThru) = thru ? 1.0f : 0.0f;
+                run (6.0, 0, 0, rms, peak);   // let anything before die away (and the switch settle)
+                fx.popSize = 1.0f; ++fx.popRequests;
+                run (1.5, 0, 0, rms, peak);   // the pop itself is long gone by now
+                run (0.5, 0, 0, rms, peak);
+                return rms;
+            };
+            const double straight = tailAfterPop (false), through = tailAfterPop (true);
+            *p.apvts.getRawParameterValue (ids::popsThru) = 0.0f;
+            *p.apvts.getRawParameterValue (ids::rvMix) = 0.0f;
+            run (6.0, 0, 0, rms, peak);
+            std::printf ("pop sounds into the effects: reverb tail 1.5 s after a pop, straight out %.5f, fed in %.5f\n", straight, through);
+            if (! (through > 0.002 && through > 4.0 * straight)) FAIL_HERE();
+        }
 
         // pops: loud, never past full scale, and different every time
         std::vector<float> popA, popB;
@@ -1544,20 +1729,19 @@ int main (int argc, char** argv)
             FreakieTestAccess::closeBubble (e);
         }
         {
-            bool in0 = false, in1 = false;
-            const auto p0 = FreakieTestAccess::bubbleTokens (e, in0);
-            float moved = 1.0e9f;
-            bool inAll = true;
-            for (int k = 0; k < 20; ++k)
-            {
-                FreakieTestAccess::run (e, 0.5f);
-                FreakieTestAccess::bubbleTokens (e, in1);
-                inAll = inAll && in1;
-            }
-            const auto p1 = FreakieTestAccess::bubbleTokens (e, in1);
-            for (size_t k = 0; k < p0.size(); ++k) moved = juce::jmin (moved, p0[k].getDistanceFrom (p1[k]));
-            std::printf ("bubble: %d tokens, least drift over 10 s %.1f px, stayed inside %d\n", (int) p0.size(), moved, (int) (in0 && inAll));
-            if (p0.size() != 2 || moved < 3.0f || ! (in0 && inAll)) FAIL_HERE();
+            // no bubble, no plucks switch: pop sounds is a little switch at the top of the help and reset list, the same size, and a click flips it
+            const auto pops = FreakieTestAccess::popsButton (e);
+            const auto reset = FreakieTestAccess::resetButton (e), help = FreakieTestAccess::helpButton (e);
+            const bool corner = help.getRight() > 1040.0f && reset.getBottom() < 80.0f;
+            const bool placed = pops.getX() == reset.getX() && pops.getWidth() == reset.getWidth() && pops.getHeight() == reset.getHeight()
+                                && pops.getY() < 6.0f && pops.getBottom() <= help.getY() + 0.5f && help.getBottom() <= reset.getY() + 0.5f;
+            FreakieTestAccess::clickAt (e, pops);
+            const bool flipped = *p.apvts.getRawParameterValue (ids::balloonSfx) < 0.5f;
+            FreakieTestAccess::clickAt (e, pops);
+            const bool back = *p.apvts.getRawParameterValue (ids::balloonSfx) > 0.5f;
+            std::printf ("tokens: %d; pop sounds at the top of the help and reset list in their style %d, click flips it %d and back %d; help and reset in the top right corner %d\n",
+                         FreakieTestAccess::numPills (e), placed, flipped, back, corner);
+            if (FreakieTestAccess::numPills (e) != 1 || ! placed || ! flipped || ! back || ! corner) FAIL_HERE();
         }
         shoot ("_tokens1.png");
         {
@@ -1566,10 +1750,10 @@ int main (int argc, char** argv)
                 auto* prm = p.apvts.getParameter (id);
                 prm->setValueNotifyingHost (prm->convertTo0to1 (real));
             };
-            setP (ids::balloonSfx, 0.0f); setP (ids::toneOn, 0.0f); setP (ids::catchFrom, 1.0f); setP (ids::grainsThru, 1.0f);
+            setP (ids::balloonSfx, 0.0f); setP (ids::catchFrom, 1.0f); setP (ids::grainsThru, 1.0f);
             FreakieTestAccess::run (e, 0.4f);
             shoot ("_tokens2.png");
-            setP (ids::balloonSfx, 1.0f); setP (ids::toneOn, 1.0f); setP (ids::catchFrom, 0.0f); setP (ids::grainsThru, 0.0f);
+            setP (ids::balloonSfx, 1.0f); setP (ids::catchFrom, 0.0f); setP (ids::grainsThru, 0.0f);
         }
         // the menus open inside the window, in the sweet-shop style
         {
@@ -1577,11 +1761,59 @@ int main (int argc, char** argv)
             FreakieTestAccess::run (e, 0.2f);
             shoot ("_preset_menu.png");
             PopupMenu::dismissAllActiveMenus();
+        }
+        // the store is shelves of balloons now: it opens under the sign, a click on a balloon buys it,
+        // a click on it again pops it, and a click anywhere else puts the store away
+        {
             FreakieTestAccess::showStore (e);
+            FreakieTestAccess::run (e, 0.5f);
+            auto& sh = FreakieTestAccess::shelves (e);
+            const bool opened = sh.isVisible() && sh.isOpen();
+            const int fx = 2;
+            const bool before = FreakieTestAccess::bought (e, fx);
+            auto clickTile = [&] (int i) { const auto c = sh.tileArea (i).getCentre(); const MouseEvent me (Desktop::getInstance().getMainMouseSource(), c, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &sh, &sh, Time(), c, Time(), 1, false); sh.mouseMove (me); sh.mouseDown (me); };
+            clickTile (fx);
+            FreakieTestAccess::run (e, 0.3f);
+            const bool boughtIt = FreakieTestAccess::bought (e, fx) != before;
+            shoot ("_store_shelves.png");
+            clickTile (fx);
+            FreakieTestAccess::run (e, 0.3f);
+            const bool poppedIt = FreakieTestAccess::bought (e, fx) == before;
+            FreakieTestAccess::mouse (e, { 300.0f, 300.0f }, 0); FreakieTestAccess::mouse (e, { 300.0f, 300.0f }, 2);
+            FreakieTestAccess::run (e, 0.6f);
+            std::printf ("store shelves: opened %d, click bought %d, click again popped %d, click away closed %d\n", opened, boughtIt, poppedIt, ! sh.isVisible());
+            if (! opened || ! boughtIt || ! poppedIt || sh.isVisible()) FAIL_HERE();
+        }
+        // the order list on the left: hidden until the cursor comes near; drag a pill to move that effect
+        {
+            p.setShelfOrder (fp::Engine::defaultOrder());
+            FreakieTestAccess::relayout (e);
             FreakieTestAccess::run (e, 0.2f);
-            shoot ("_store_menu_live.png");
-            PopupMenu::dismissAllActiveMenus();
-            FreakieTestAccess::run (e, 0.2f);
+            auto& list = FreakieTestAccess::orderList (e);
+            const bool hidden = list.getRight() <= 0;
+            FreakieTestAccess::showOrder (e);
+            const bool shown = list.getX() >= 0;
+            const auto before = FreakieTestAccess::shelfItems (e);
+            const auto chips = list.layout();
+            // drag the first (smear) down onto the third's place
+            FreakieTestAccess::drag (list, chips[0].r.getCentre(), chips[2].r.getCentre());
+            const auto after = FreakieTestAccess::shelfItems (e);
+            const bool moved = after.size() == before.size() && after[2] == before[0] && after[0] == before[1] && after[1] == before[2];
+            FreakieTestAccess::showOrder (e);
+            FreakieTestAccess::run (e, 0.05f);
+            FreakieTestAccess::showOrder (e);
+            shoot ("_order_list.png");
+            // and back up to the top
+            const auto chips2 = list.layout();
+            FreakieTestAccess::drag (list, chips2[2].r.getCentre(), chips2[0].r.getCentre() - Point<float> (0.0f, 6.0f));
+            const bool back = FreakieTestAccess::shelfItems (e) == before;
+            FreakieTestAccess::showOrder (e);
+            FreakieTestAccess::roll (e);
+            const bool rolled = FreakieTestAccess::shelfItems (e) != before;
+            FreakieTestAccess::asTheyWere (e);
+            std::printf ("order list: hidden at first %d, slides in %d, dragging smear to third moved it %d, dragging it back %d, the die rolled a new order %d\n",
+                         hidden, shown, moved, back, rolled);
+            if (! hidden || ! shown || ! moved || ! back || ! rolled) FAIL_HERE();
         }
 
         // a sound balloon only goes when you pop it: hold the pump for 15 s, it's still there, let go and it floats off
@@ -1659,7 +1891,7 @@ int main (int argc, char** argv)
         FreakieTestAccess::run (e, 4.0f);
         {
             int bounced = 0;
-            for (int k = 0; k < 20; ++k) { FreakieTestAccess::run (e, 0.05f); bounced = jmax (bounced, FreakieTestAccess::bouncedDrops (e)); }
+            for (int k = 0; k < 80; ++k) { FreakieTestAccess::run (e, 0.05f); bounced = jmax (bounced, FreakieTestAccess::bouncedDrops (e)); }   // (drops land at random: give them 4 s)
             std::printf ("rain bouncing off Pinkie's umbrella: up to %d drops in the air\n", bounced);
             if (bounced < 1) FAIL_HERE();
         }
@@ -1819,11 +2051,13 @@ int main (int argc, char** argv)
                          (int) baseline, (int) most, (int) end, (unsigned) FreakieTestAccess::lent (e), shotStrike);
             if (most < baseline + 4 || end != baseline || FreakieTestAccess::lent (e) != 0 || ! shotStrike) FAIL_HERE();
 
-            // the bypass switch on the info card
+            // the bypass switch on the info card (with the card out)
+            FreakieTestAccess::showCard (e, true);
             FreakieTestAccess::clickAt (e, FreakieTestAccess::bypassButton (e));
             FreakieTestAccess::run (e, 2.0f);
             const bool byp = *p.apvts.getRawParameterValue (ids::fxBypass) > 0.5f;
             shoot ("_bypass.png");
+            FreakieTestAccess::showCard (e, true);
             FreakieTestAccess::clickAt (e, FreakieTestAccess::bypassButton (e));
             FreakieTestAccess::run (e, 0.5f);
             std::printf ("bypass switch: on %d, off again %d\n", byp, *p.apvts.getRawParameterValue (ids::fxBypass) < 0.5f);
@@ -1877,7 +2111,8 @@ int main (int argc, char** argv)
             if (differ != 0 || ! flat || ! ordered) FAIL_HERE();
         }
 
-        // the shelf: drag the stutter's bow to the far left and let go: it goes first in the sound, the others move up
+        // the order: the bows can't be dragged out of place any more (they stand on the grass);
+        // the die in the order row rolls a new order instead
         {
             const auto before = p.getShelfOrder();
             const auto from = FreakieTestAccess::anchorPos (e, 4);
@@ -1887,16 +2122,68 @@ int main (int argc, char** argv)
                 FreakieTestAccess::mouse (e, from + (Point<float> (150.0f, from.y - 20.0f) - from) * ((float) k / 12.0f), 1);
                 FreakieTestAccess::run (e, 1.0f / 60.0f);
             }
-            shoot ("_shelf_drag.png");
             FreakieTestAccess::mouse (e, Point<float> (150.0f, from.y - 20.0f), 2);
             FreakieTestAccess::run (e, 1.5f);
-            const auto after = p.getShelfOrder();
-            const bool first = after[0] == fp::Engine::slotStutter && before[0] != fp::Engine::slotStutter;
+            const bool same = p.getShelfOrder() == before;
             const bool back = std::abs (FreakieTestAccess::anchorPos (e, 4).y - FreakieTestAccess::shelfY()) < 2.0f;
-            shoot ("_shelf.png");
-            std::printf ("shelf drag: the stutter went from place %d to first %d, back standing on the shelf %d\n",
-                         (int) (std::find (before.begin(), before.end(), (int) fp::Engine::slotStutter) - before.begin()) + 1, first, back);
-            if (! first || ! back) FAIL_HERE();
+            FreakieTestAccess::showOrder (e);
+            FreakieTestAccess::clickAt (e, FreakieTestAccess::orderDie (e));
+            FreakieTestAccess::run (e, 1.5f);
+            const bool rolled = p.getShelfOrder() != before;
+            shoot ("_order.png");
+            std::printf ("order: dragging a bow leaves the order alone %d and it stands back on the grass %d; the die rolled a new order %d\n", same, back, rolled);
+            if (! same || ! back || ! rolled) FAIL_HERE();
+            FreakieTestAccess::asTheyWere (e);
+            FreakieTestAccess::run (e, 1.0f);
+        }
+
+        // the weather row across the top: each switch turns its weather on with a click and off with another
+        {
+            const char* idsOf[] = { ids::cloudy, ids::rain, ids::snow, ids::heat, ids::autoWeather };
+            const Rectangle<float> rects[] = { FreakieTestAccess::cloudyButton (e), FreakieTestAccess::rainButton (e), FreakieTestAccess::snowButton (e),
+                                               FreakieTestAccess::heatButton (e), FreakieTestAccess::autoButton (e) };
+            int worked = 0;
+            for (int k = 0; k < 5; ++k)
+            {
+                const bool was = *p.apvts.getRawParameterValue (idsOf[k]) > 0.5f;
+                FreakieTestAccess::clickAt (e, rects[k]);
+                const bool on = *p.apvts.getRawParameterValue (idsOf[k]) > 0.5f;
+                if (k == 2) { FreakieTestAccess::run (e, 0.3f); shoot ("_weather_row.png"); }
+                FreakieTestAccess::clickAt (e, rects[k]);
+                const bool off = *p.apvts.getRawParameterValue (idsOf[k]) > 0.5f;
+                worked += (on != was && off == was) ? 1 : 0;
+            }
+            // and a balloon floating over a switch doesn't get in the way: the row is above them
+            FreakieTestAccess::run (e, 0.1f);
+            auto& room = FreakieTestAccess::content (e);
+            const int topIndex = room.getNumChildComponents() - 1, rowIndex = room.getIndexOfChildComponent (&FreakieTestAccess::weatherRow (e));
+            std::printf ("weather row: %d of 5 switches turn on and off with a click; it sits on top of the balloons %d\n", worked, rowIndex >= topIndex - 2);
+            if (worked != 5 || rowIndex < topIndex - 2) FAIL_HERE();
+        }
+
+        // the presets' filmstrip: a click on the name opens it, a click on a picture changes the preset and
+        // puts it away, and it opens again every time after that
+        {
+            const int start = p.getCurrentProgram();
+            int opens = 0, picks = 0, closes = 0;
+            for (int round = 0; round < 3; ++round)
+            {
+                FreakieTestAccess::press (FreakieTestAccess::presetBox (e), { 20.0f, 10.0f });
+                FreakieTestAccess::run (e, 0.5f);
+                auto& st = FreakieTestAccess::strip (e);
+                opens += (st.isOpen() && st.isVisible() && st.getY() < FreakiePieEditor::designH - 50) ? 1 : 0;
+                if (round == 0) shoot ("_presets.png");
+                const int want = 2 + round * 3;
+                st.scrollTo (want);
+                FreakieTestAccess::run (e, 0.6f);
+                FreakieTestAccess::press (st, st.frameArea (want).getCentre());
+                FreakieTestAccess::run (e, 0.6f);
+                picks += p.getCurrentProgram() == want ? 1 : 0;
+                closes += ! st.isVisible() ? 1 : 0;
+            }
+            std::printf ("preset filmstrip: opened %d of 3 times, picked the preset %d of 3, put itself away %d of 3\n", opens, picks, closes);
+            if (opens != 3 || picks != 3 || closes != 3) FAIL_HERE();
+            p.setCurrentProgram (start);
             p.setShelfOrder (fp::Engine::defaultOrder());
             FreakieTestAccess::relayout (e);
             FreakieTestAccess::run (e, 1.5f);
@@ -1927,6 +2214,115 @@ int main (int argc, char** argv)
             const float thawed = FreakieTestAccess::balloon (e, 0).frost;
             std::printf ("snow in the shop: on %d, balloons iced %.2f, %d flakes in the air, thawed to %.2f after it stopped\n", on, frost, flakes, thawed);
             if (! on || frost < 0.9f || flakes < 20 || thawed > 0.05f) FAIL_HERE();
+        }
+
+        // heatwave and auto weather: their switches flip the parameters, and the shop goes warm
+        {
+            AudioBuffer<float> sil (2, 512); MidiBuffer mm; sil.clear();
+            FreakieTestAccess::clickAt (e, FreakieTestAccess::heatButton (e));
+            const bool heatOn = *p.apvts.getRawParameterValue (ids::heat) > 0.5f;
+            float uiDue = 0.0f;
+            for (int k = 0; k < (int) (6.0 * 48000 / 512); ++k)
+            {
+                p.processBlock (sil, mm);
+                uiDue += 512.0f / 48000.0f;
+                while (uiDue >= 1.0f / 60.0f) { uiDue -= 1.0f / 60.0f; FreakieTestAccess::run (e, 1.0f / 60.0f); }
+            }
+            FreakieTestAccess::clickAt (e, FreakieTestAccess::autoButton (e));
+            const bool autoOn = *p.apvts.getRawParameterValue (ids::autoWeather) > 0.5f;
+            FreakieTestAccess::run (e, 0.5f);
+            shoot ("_heat.png");
+            const float melt = FreakieTestAccess::meltVis (e);
+            FreakieTestAccess::clickAt (e, FreakieTestAccess::autoButton (e));
+            FreakieTestAccess::clickAt (e, FreakieTestAccess::heatButton (e));
+            for (int k = 0; k < (int) (6.0 * 48000 / 512); ++k) p.processBlock (sil, mm);
+            FreakieTestAccess::run (e, 3.0f);
+            std::printf ("heatwave in the shop: on %d, Pinkie melted %.2f, heat in the sound %.2f after it stopped; auto weather switch %d\n",
+                         heatOn, melt, p.heatAmount.load(), autoOn);
+            if (! heatOn || melt < 0.9f || p.heatAmount.load() > 0.0f || ! autoOn || *p.apvts.getRawParameterValue (ids::autoWeather) > 0.5f) FAIL_HERE();
+        }
+
+        // the snow and the heatwave never together; right-click either for its fade times; a hot rain soaks Pinkie
+        {
+            AudioBuffer<float> sil (2, 512); MidiBuffer mm; sil.clear();
+            auto on = [&] (const char* id) { return *p.apvts.getRawParameterValue (id) > 0.5f; };
+            FreakieTestAccess::clickAt (e, FreakieTestAccess::snowButton (e));
+            FreakieTestAccess::clickAt (e, FreakieTestAccess::heatButton (e));
+            const bool heatWins = on (ids::heat) && ! on (ids::snow);
+            FreakieTestAccess::clickAt (e, FreakieTestAccess::snowButton (e));
+            const bool snowWins = on (ids::snow) && ! on (ids::heat);
+            // both at once from outside (a preset, automation): the processor sends the older one away
+            p.apvts.getParameter (ids::heat)->setValueNotifyingHost (1.0f);
+            p.keepSnowAndHeatApart();
+            const bool apart = on (ids::heat) && ! on (ids::snow);
+            p.apvts.getParameter (ids::heat)->setValueNotifyingHost (0.0f);
+            p.keepSnowAndHeatApart();
+
+            // right-click: the popups
+            auto& row = FreakieTestAccess::weatherRow (e);
+            auto& fp_ = FreakieTestAccess::fades (e);
+            FreakieTestAccess::rightClick (row, FreakieTestAccess::heatButton (e).getCentre() - row.getPosition().toFloat());
+            FreakieTestAccess::run (e, 0.1f);
+            const bool heatPopup = fp_.isVisible() && fp_.params[0] == p.apvts.getParameter (ids::heatIn);
+            shoot ("_heat_fades.png");
+            // drag the fade in to the far right (5 min), then double-click it back to 5 s, then to about 20 s
+            const auto tr = fp_.trackArea (0);
+            FreakieTestAccess::drag (fp_, tr.getCentre(), { tr.getRight() + 20.0f, tr.getCentreY() });
+            const float longest = *p.apvts.getRawParameterValue (ids::heatIn);
+            FreakieTestAccess::press (fp_, tr.getCentre(), 2);
+            const float reset5 = *p.apvts.getRawParameterValue (ids::heatIn);
+            FreakieTestAccess::rightClick (row, FreakieTestAccess::snowButton (e).getCentre() - row.getPosition().toFloat());
+            const bool snowPopup = fp_.isVisible() && fp_.params[1] == p.apvts.getParameter (ids::snowOut);
+            FreakieTestAccess::mouse (e, { 500.0f, 300.0f }, 0); FreakieTestAccess::mouse (e, { 500.0f, 300.0f }, 2);
+            const bool closed = ! fp_.isVisible();
+            // the heat's own fade in: 20 s means about a quarter of the way in after 5 s
+            auto* hin = p.apvts.getParameter (ids::heatIn);
+            hin->setValueNotifyingHost (hin->convertTo0to1 (20.0f));
+            p.apvts.getParameter (ids::snow)->setValueNotifyingHost (0.0f);
+            p.apvts.getParameter (ids::heat)->setValueNotifyingHost (1.0f);
+            for (int k = 0; k < (int) (5.0 * 48000 / 512); ++k) p.processBlock (sil, mm);
+            const float after5 = p.heatAmount.load();
+            // rain in the heat: Pinkie lies soaked in the puddle (no umbrella)
+            p.apvts.getParameter (ids::rain)->setValueNotifyingHost (1.0f);
+            FreakieTestAccess::run (e, 4.0f);
+            const float wet = FreakieTestAccess::wetVis (e), umb = FreakieTestAccess::umbrellaVis (e);
+            shoot ("_wet.png");
+            p.apvts.getParameter (ids::rain)->setValueNotifyingHost (0.0f);
+            p.apvts.getParameter (ids::heat)->setValueNotifyingHost (0.0f);
+            hin->setValueNotifyingHost (hin->convertTo0to1 (5.0f));
+            for (int k = 0; k < (int) (6.0 * 48000 / 512); ++k) p.processBlock (sil, mm);
+            FreakieTestAccess::run (e, 3.0f);
+            std::printf ("snow and heat: heat sends snow away %d, snow sends heat away %d, both from outside kept apart %d\n", heatWins, snowWins, apart);
+            std::printf ("fade popups: heat's on a right-click %d (dragged to %.0f s, double-click %.0f s), snow's %d, a click away closes it %d; heat 5 s into a 20 s fade in %.2f\n",
+                         heatPopup, longest, reset5, snowPopup, closed, after5);
+            std::printf ("hot rain: Pinkie soaked %.2f, umbrella %.2f\n", wet, umb);
+            if (! heatWins || ! snowWins || ! apart || ! heatPopup || longest < 299.0f || std::abs (reset5 - 5.0f) > 0.01f || ! snowPopup || ! closed
+                || std::abs (after5 - 0.25f) > 0.03f || wet < 0.9f || umb > 0.1f) FAIL_HERE();
+        }
+
+        // the card waits above the window until the cursor comes near
+        {
+            FreakieTestAccess::showCard (e, false);
+            const bool hidden = FreakieTestAccess::card (e).getBottom() <= 0;
+            FreakieTestAccess::showCard (e, true);
+            const bool shown = FreakieTestAccess::card (e).getY() >= 0;
+            const bool awningGone = FreakieTestAccess::storeSign (e).getHeight() < 45.0f;
+            FreakieTestAccess::run (e, 0.05f);
+            shoot ("_card.png");
+            FreakieTestAccess::showCard (e, false);
+            // the card, order list and menus sit on a layer over the whole room (so over balloons and clouds),
+            // under the chalkboard and the library
+            auto& ed = static_cast<Component&> (e);
+            const int iRoom = ed.getIndexOfChildComponent (&FreakieTestAccess::content (e)), iOver = ed.getIndexOfChildComponent (&FreakieTestAccess::overlay (e));
+            const bool layered = iOver > iRoom && FreakieTestAccess::orderList (e).getParentComponent() == &FreakieTestAccess::overlay (e)
+                                 && FreakieTestAccess::fades (e).getParentComponent() == &FreakieTestAccess::overlay (e)
+                                 && FreakieTestAccess::shelves (e).getParentComponent() == &FreakieTestAccess::overlay (e);
+            // the chalkboard stands clear of the pin cushion (it sits 14 px left of the pin's home, 40 px wide)
+            const float cushionLeft = FreakieTestAccess::pinHome (e).x - 14.0f - 20.0f;
+            const float gap = cushionLeft - FreakieTestAccess::chalkRest (e).getRight();
+            std::printf ("card: hidden %d, shown when near %d; store sign without its awning %d; overlays above the room %d; chalkboard %.0f px clear of the pin\n",
+                         hidden, shown, awningGone, layered, gap);
+            if (! hidden || ! shown || ! awningGone || ! layered || gap < 8.0f) FAIL_HERE();
         }
 
         // the chalkboard's master eq page: drawing on it changes the EQ; the library opens, turns pages and closes

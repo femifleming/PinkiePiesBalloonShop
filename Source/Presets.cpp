@@ -14,7 +14,12 @@ const std::vector<Preset>& list()
         constexpr float sine = 5.0f;   // grain shapes: 0 saw, 1 reverse saw, 2 bell, 3 triangle, 4 pulse, 5 sine, 6 chalk
         std::vector<Preset> p;
 
-        p.push_back ({ "Balloon Shop", "start", 13, {}, {}, {} });   // the default: Ponyville
+        // the default: Ponyville. A touch of reverb and smear, and long grains drifting about the
+        // stereo field; no pitch shifting, no random octaves, nothing else
+        p.push_back ({ "Sugarcube Corner", "start", 13, {},
+                       { { ids::rvMix, 0.2f }, { ids::sgMix, 0.2f },
+                         { ids::grMix, 0.25f }, { ids::grSize, 800.0f }, { ids::grPosRand, 1.0f }, { ids::grPan, 0.8f },
+                         { ids::psMix, 0.0f }, { ids::psFeedback, 0.0f }, { ids::grRandOct, 0.0f } }, {} });
 
         // ---- feedback: the main loop turned up until it sings by itself
         p.push_back ({ "Canterlot Chimes", "feedback", 1, "Major (Ionian)",
@@ -32,8 +37,8 @@ const std::vector<Preset>& list()
         p.push_back ({ "Las Pegasus Neon Loop", "feedback", 5, "Lydian",
                        { { ids::masterFb, 0.88f }, { ids::psShift, 12.0f }, { ids::psFeedback, 0.85f }, { ids::psMix, 0.55f },
                          { ids::rvDecay, 7.0f }, { ids::rvMix, 0.5f }, { ids::sgMix, 0.3f },
-                         st (K::flanger, ids::storeA, 0.3f), st (K::flanger, ids::storeB, 0.6f), st (K::flanger, ids::storeLevel, 0.7f) },
-                       { K::flanger } });
+                         st (K::phaser, ids::storeA, 0.3f), st (K::phaser, ids::storeB, 0.6f), st (K::phaser, ids::storeLevel, 0.7f) },
+                       { K::phaser } });
 
         // ---- stretch: big, sparse, sine-shaped grains that pull the sound out long
         p.push_back ({ "Cloudsdale Stretch", "stretch", 3, {},
@@ -67,9 +72,9 @@ const std::vector<Preset>& list()
                        { K::delay, K::reverb } });
         p.push_back ({ "Froggy Bottom Chorus", "useful", 4, {},
                        { { ids::psMix, 0.0f }, { ids::sgMix, 0.2f }, { ids::grMix, 0.25f }, { ids::rvMix, 0.3f },
-                         st (K::flanger, ids::storeA, 0.15f), st (K::flanger, ids::storeB, 0.4f), st (K::flanger, ids::storeLevel, 0.8f),
+                         st (K::phaser, ids::storeA, 0.15f), st (K::phaser, ids::storeB, 0.4f), st (K::phaser, ids::storeLevel, 0.8f),
                          st (K::harmonizer, ids::storeA, -5.0f), st (K::harmonizer, ids::storeB, 0.2f), st (K::harmonizer, ids::storeLevel, 0.6f) },
-                       { K::flanger, K::harmonizer } });
+                       { K::phaser, K::harmonizer } });
         p.push_back ({ "Rock Farm Crunch", "useful", 7, {},
                        { { ids::sgMix, 0.1f }, { ids::psMix, 0.0f }, { ids::grMix, 0.2f }, { ids::rvMix, 0.15f },
                          st (K::disto, ids::storeA, 0.8f), st (K::disto, ids::storeB, 0.5f), st (K::disto, ids::storeLevel, 0.7f),

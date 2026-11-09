@@ -22,7 +22,7 @@ class StoreFX
 {
 public:
     static constexpr int kNum = 11;
-    enum Kind { reverb = 0, delay, disto, waveguide, complexRes, degrade, harmonizer, clipper, flanger, allpassWG, ringMod };
+    enum Kind { reverb = 0, delay, disto, waveguide, complexRes, degrade, harmonizer, clipper, phaser, allpassWG, ringMod };
     enum Pitch { notPitched = 0, pitchHz, pitchSemis };
 
     struct Control { const char* name; float lo, hi, def; bool log; const char* unit; int pitch; };
@@ -39,7 +39,7 @@ public:
             { "Degrade",    "Degrade",           "degrade",    { "bit depth", 2.0f, 32.0f, 8.0f, true, "bits", 0 },     { "sr scale", 0.01f, 1.0f, 0.25f, true, "", 0 } },
             { "Harmonizer", "Harmonizer",        "harmonizer", { "transpose", -12.0f, 12.0f, -7.0f, false, "st", pitchSemis }, { "feedback", 0.0f, 1.0f, 0.25f, false, "", 0 } },
             { "Clipper",    "Clipper",           "clipper",    { "threshold", 0.001f, 0.25f, 0.1f, true, "", 0 },        { "cutoff", 100.0f, 15000.0f, 5000.0f, true, "Hz", 0 } },
-            { "Flanger",    "Flanger",           "flanger",    { "lfo freq", 0.1f, 20.0f, 0.2f, true, "Hz", 0 },         { "feedback", 0.0f, 1.0f, 0.5f, false, "", 0 } },
+            { "Phaser",     "Phaser",            "phaser",     { "lfo freq", 0.05f, 10.0f, 0.3f, true, "Hz", 0 },        { "feedback", 0.0f, 1.0f, 0.5f, false, "", 0 } },
             { "AllpassWG",  "Detuned Resonator", "detuned",    { "frequency", 20.0f, 500.0f, 100.0f, true, "Hz", pitchHz }, { "detune", 0.0f, 1.0f, 0.5f, false, "", 0 } },
             { "RingMod",    "Ring Mod",          "ring mod",   { "frequency", 20.0f, 5000.0f, 440.0f, true, "Hz", pitchHz }, { "follow", 0.0f, 1.0f, 0.3f, false, "", 0 } },
         } };
@@ -70,7 +70,6 @@ public:
         dl.line.init ((int) (1.05 * sr) + 8);
         wg.line.init ((int) (sr / 20.0) + 16);
         hz.line.init ((int) (0.25 * sr) + 8);
-        fl.line.init ((int) (0.02 * sr) + 8);
         ap.line.init ((int) (sr / 20.0) + 16);
         for (auto& a : ap.ap) a.init ((int) (sr / 20.0) + 16);
         fadeCoef = (float) (1.0 - std::exp (-1.0 / (0.03 * sr)));
@@ -194,7 +193,7 @@ private:
     struct { float steps = 128, rate = 0.25f, phase = 1, held = 0; } dg;
     struct { Line line; float ratio = 1, fb = 0, phase = 0, out = 0, win = 4410; } hz;
     struct { float t = 0.1f, mul = 3.3f; Svf f; } cl;
-    struct { Line line; double ph = 0; float inc = 0, fb = 0; } fl;
+    struct { float z[6] {}, last = 0; double ph = 0; float inc = 0, fb = 0; double lo = 0, hi = 0; } ph;   // six allpass stages
     struct Allpass { Line line; void init (int n) { line.init (n); } };
     struct { Line line; Allpass ap[3]; float len = 100, dly[3] {}, out = 0; } ap;
     struct { double ph = 0; float inc = 0, follow = 0, env = 0, atk = 0.01f, rel = 0.001f; } rm;
@@ -213,7 +212,7 @@ private:
             case degrade:    dg.phase = 1; dg.held = 0; break;
             case harmonizer: hz.line.clear(); hz.out = 0; hz.phase = 0; break;
             case clipper:    cl.f.s1 = cl.f.s2 = 0; break;
-            case flanger:    fl.line.clear(); fl.ph = 0; break;
+            case phaser:     for (auto& z : ph.z) z = 0; ph.last = 0; ph.ph = 0; break;
             case allpassWG:  ap.line.clear(); for (auto& a : ap.ap) a.line.clear(); ap.out = 0; break;
             case ringMod:    rm.ph = 0; rm.env = 0; break;
             default: break;
@@ -255,7 +254,11 @@ private:
                 hz.win = (float) (0.1 * sr);
                 break;
             case clipper:    cl.t = std::clamp (s.c1, 0.001f, 0.25f); cl.mul = 0.33f / cl.t; cl.f.set (sr, s.c2); break;
-            case flanger:    fl.inc = (float) (kTwoPi * s.c1 / sr); fl.fb = std::min (s.c2, 0.99f); break;
+            case phaser:
+                ph.inc = (float) (kTwoPi * s.c1 / sr);
+                ph.fb = 0.85f * std::clamp (s.c2, 0.0f, 1.0f);
+                ph.lo = std::log (200.0); ph.hi = std::log (std::min (5000.0, sr * 0.4));   // the notches sweep 200 Hz .. 5 kHz
+                break;
             case ringMod:
                 rm.inc = (float) (kTwoPi * snapHz (s.c1, scale) / sr);
                 rm.follow = std::clamp (s.c2, 0.0f, 1.0f);
@@ -338,13 +341,21 @@ private:
                 return y;
             }
             case clipper:   return cl.f.lp (std::clamp (x, -cl.t, cl.t) * cl.mul);
-            case flanger:
+            case phaser:    // six first-order allpasses swept by a sine, fed back; added to the dry sound for the notches
             {
-                fl.ph += fl.inc; if (fl.ph > kTwoPi) fl.ph -= kTwoPi;
-                const float d = (0.005f + 0.0045f * (float) std::sin (fl.ph)) * (float) sr;
-                const float y = fl.line.read (d);
-                fl.line.push (x + y * fl.fb);
-                return x + y;
+                ph.ph += ph.inc; if (ph.ph > kTwoPi) ph.ph -= kTwoPi;
+                const double f = std::exp (ph.lo + (ph.hi - ph.lo) * (0.5 + 0.5 * std::sin (ph.ph)));
+                const double tn = std::tan (kPi * f / sr);
+                const float a = (float) ((tn - 1.0) / (tn + 1.0));
+                float v = x + ph.fb * ph.last;
+                for (auto& z : ph.z)
+                {
+                    const float y = a * v + z;
+                    z = flushDenormal (v - a * y);
+                    v = y;
+                }
+                ph.last = std::tanh (v);
+                return 0.7f * (x + v);
             }
             case allpassWG: // a waveguide with three allpasses in the loop, which pull its partials out of tune
             {
