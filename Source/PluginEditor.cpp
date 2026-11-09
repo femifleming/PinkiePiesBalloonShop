@@ -597,14 +597,17 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
     anchors[5] = { { 350.0f, shelfY }, {}, {}, {}, false, balloonYellow };  // pitch
     anchors[3] = { { 500.0f, shelfY }, {}, {}, {}, false, balloonMint };    // grains
     anchors[6] = { { 650.0f, shelfY }, {}, {}, {}, false, balloonLilac };   // reverb
-    anchors[4] = { { 800.0f, shelfY }, {}, {}, {}, false, balloonOrange };  // the gumball machine (stutter)
+    anchors[4] = { { 800.0f, shelfY }, {}, {}, {}, false, balloonOrange };  // the gumball machine (stutter): bought at the store
     for (int i : { 2, 3, 4, 5, 6 }) anchors[i].onShelf = true;
+    anchors[4].box = true;      // it comes in a gift box like the store's other effects
+    anchors[4].hidden = true;   // (until you buy it)
 
     struct Def { const char* id; const char* label; int hue; float len; int anchor; };
     const Def defs[] = {
         // spectral smear (blue bow)
         { ids::sgMix,     "spectral\nsmear",  balloonBlue,   240, 2 },
         { ids::sgFreeze,  "spectral\nfreeze", balloonBlue,   110, 2 },
+        { ids::sgTilt,    "spectral\ntilt",   balloonBlue,   175, 2 },
         // pitch, reverb, the loop (pink bow)
         { ids::psShift,   "shift",           balloonYellow, 280, 5 }, { ids::psFeedback, "pitch\nfeedback", balloonYellow, 220, 5 },
         { ids::psMix,     "pitch\nmix",      balloonYellow, 160, 5 }, { ids::rvDecay,   "decay",           balloonLilac,  250, 6 },
@@ -632,8 +635,19 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
             floaters.add (b);
             if (String (d.id) == ids::grFreeze) freezeBalloon = b;
             if (String (d.id) == ids::sgFreeze) spectralFreezeBalloon = b;
+            // the gumball machine's four balloons belong to the store: hidden until you buy it
+            {
+                const char* stIds[] = { ids::stAmount, ids::stBounce, ids::stSway, ids::stCutup };
+                for (int k = 0; k < 4; ++k)
+                    if (String (d.id) == stIds[k])
+                    {
+                        storeBalloons[stutterItem][k] = b;
+                        b->alive = false;
+                        b->bypassable = true;
+                    }
+            }
             // the effects' own controls dim while bypassed; the grain controls still shape the frozen balloons
-            for (auto* fxId : { ids::sgMix, ids::sgFreeze, ids::psShift, ids::psFeedback, ids::psMix, ids::rvDecay,
+            for (auto* fxId : { ids::sgMix, ids::sgFreeze, ids::sgTilt, ids::psShift, ids::psFeedback, ids::psMix, ids::rvDecay,
                                 ids::rvMix, ids::masterFb, ids::grMix, ids::grFreeze })
                 if (String (d.id) == fxId) b->bypassable = true;
             // each bunch fans out from its own bow
@@ -644,7 +658,8 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
             // they all start bunched in their bow and float up when the window opens
             b->pos = anchors[d.anchor].pos + Point<float> (rnd.nextFloat() * 80.0f - 40.0f, -20.0f - rnd.nextFloat() * 40.0f);
             b->vel = { rnd.nextFloat() * 160.0f - 80.0f, -rnd.nextFloat() * 120.0f };
-            content.addAndMakeVisible (b);
+            content.addChildComponent (b);
+            b->setVisible (b->alive);
             b->place();
         }
 
@@ -760,6 +775,7 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
     pinkieSleep = ImageCache::getFromMemory (BinaryData::pinkie_sleep_png, BinaryData::pinkie_sleep_pngSize);
     pinkieCrystal = ImageCache::getFromMemory (BinaryData::pinkie_crystal_png, BinaryData::pinkie_crystal_pngSize);
     pinkieSnow = ImageCache::getFromMemory (BinaryData::pinkie_snow_png, BinaryData::pinkie_snow_pngSize);
+    pinkieCold = ImageCache::getFromMemory (BinaryData::pinkie_cold_png, BinaryData::pinkie_cold_pngSize);
     pinkieHeat = ImageCache::getFromMemory (BinaryData::pinkie_heat_png, BinaryData::pinkie_heat_pngSize);
     pinkieWet = ImageCache::getFromMemory (BinaryData::pinkie_wet_png, BinaryData::pinkie_wet_pngSize);
 
@@ -1164,11 +1180,14 @@ void FreakiePieEditor::drawPinkie (Graphics& g) const
     const float wet = wetVis * (1.0f - scared) * (1.0f - asleep);
     const float umbrella = umbrellaVis * (1.0f - scared) * (1.0f - asleep) * (1.0f - wet);
     const float crystal = crystalVis * (1.0f - scared) * (1.0f - asleep) * (1.0f - wet) * (1.0f - umbrella);
-    const float snowy = snowyVis * (1.0f - scared) * (1.0f - asleep) * (1.0f - wet) * (1.0f - umbrella) * (1.0f - crystal);
-    const float melted = meltVis * (1.0f - scared) * (1.0f - asleep) * (1.0f - wet) * (1.0f - umbrella) * (1.0f - crystal) * (1.0f - snowy);
-    const float sitting = jmax (0.0f, 1.0f - scared - asleep - wet - umbrella - crystal - snowy - melted);
+    // in the snow too long she catches a cold: the cold picture takes over from the snowy one
+    const float snowAll = snowyVis * (1.0f - scared) * (1.0f - asleep) * (1.0f - wet) * (1.0f - umbrella) * (1.0f - crystal);
+    const float cold = snowAll * coldVis, snowy = snowAll - cold;
+    const float melted = meltVis * (1.0f - scared) * (1.0f - asleep) * (1.0f - wet) * (1.0f - umbrella) * (1.0f - crystal) * (1.0f - snowAll);
+    const float sitting = jmax (0.0f, 1.0f - scared - asleep - wet - umbrella - crystal - snowAll - melted);
     drawAt (pinkieWet, sized (pinkieWet, 150.0f, 8.0f), wet);
     drawAt (pinkieSnow, sized (pinkieSnow, 100.0f, 2.0f), snowy);
+    drawAt (pinkieCold, sized (pinkieCold, 112.0f, 4.0f), cold);
     drawAt (pinkieHeat, sized (pinkieHeat, 142.0f, 6.0f), melted);
     drawAt (pinkie, sized (pinkie, 104.0f, 0.0f), sitting);
     if (crystal > 0.001f)
@@ -1224,17 +1243,16 @@ void FreakiePieEditor::openStore()
     m.setLookAndFeel (&storeLook);
     storeLook.time = (float) clock;
     m.addSectionHeader ("Balloon Store");
-    for (int e = 0; e < fp::StoreFX::kNum; ++e)
+    for (int e = 0; e < kStoreItems; ++e)
     {
-        const auto& in = fp::StoreFX::infos()[(size_t) e];
         const bool owned = bought (e);
-        PopupMenu::Item it (in.name);
+        PopupMenu::Item it (storeItemName (e));
         it.itemID = e + 1;
         it.isTicked = owned;
         it.colour = storeBalloons[e][0] != nullptr ? balloonColours (storeBalloons[e][0]->hue).fill : Colour (0xffff8fb8);
         it.shortcutKeyDescription = owned ? String ("yours! tap to pop")
                                   : ((lentShown >> e) & 1u) != 0 ? String ("from the lightning! tap to keep")
-                                                                  : String (in.c1.name) + " + " + in.c2.name;
+                                                                  : storeItemWhat (e);
         m.addItem (it);
     }
     m.addSeparator();
@@ -1251,23 +1269,40 @@ void FreakiePieEditor::openStore()
                          if (r == 100)
                          {
                              safe->proc.popStruckRequest.fetch_or ((1u << fp::StoreFX::kNum) - 1u);
-                             for (int e = 0; e < fp::StoreFX::kNum; ++e) safe->setBought (e, false);
+                             for (int e = 0; e < kStoreItems; ++e) safe->setBought (e, false);
                              return;
                          }
                          safe->setBought (r - 1, ! safe->bought (r - 1));
                      });
 }
 
+String FreakiePieEditor::ownedId (int item)
+{
+    return item == stutterItem ? String (ids::stOwned) : ids::store (item, ids::storeOwned);
+}
+
+String FreakiePieEditor::storeItemName (int item)
+{
+    return item == stutterItem ? String ("Gumball Machine") : String (fp::StoreFX::infos()[(size_t) item].name);
+}
+
+String FreakiePieEditor::storeItemWhat (int item)
+{
+    if (item == stutterItem) return "stutter + bounce + sway + cut-up";
+    const auto& in = fp::StoreFX::infos()[(size_t) item];
+    return String (in.c1.name) + " + " + in.c2.name;
+}
+
 void FreakiePieEditor::setBought (int fx, bool bought)
 {
-    if (auto* prm = proc.apvts.getParameter (ids::store (fx, ids::storeOwned)))
+    if (auto* prm = proc.apvts.getParameter (ownedId (fx)))
         prm->setValueNotifyingHost (bought ? 1.0f : 0.0f);
     syncStore();
 }
 
 bool FreakiePieEditor::bought (int fx) const
 {
-    return proc.apvts.getRawParameterValue (ids::store (fx, ids::storeOwned))->load() > 0.5f;
+    return proc.apvts.getRawParameterValue (ownedId (fx))->load() > 0.5f;
 }
 
 // follow the "bought" parameters (they also change from the host, presets and undo), and what the
@@ -1275,9 +1310,9 @@ bool FreakiePieEditor::bought (int fx) const
 void FreakiePieEditor::syncStore()
 {
     const uint32_t struck = proc.struckMask.load();
-    for (int e = 0; e < fp::StoreFX::kNum; ++e)
+    for (int e = 0; e < kStoreItems; ++e)
     {
-        const bool isBought = bought (e), isLent = ((struck >> e) & 1u) != 0;
+        const bool isBought = bought (e), isLent = e != stutterItem && ((struck >> e) & 1u) != 0;   // (the lightning never lends the stutter)
         const bool owned = isBought || isLent;
         if (owned == storeShown[e])
         {
@@ -1288,7 +1323,7 @@ void FreakiePieEditor::syncStore()
         const bool wasLent = ((lentShown >> e) & 1u) != 0;
         {
             // its gift box: out of the shop (or down with the lightning) to a spot on the floor; gone when it pops
-            auto& box = anchors[firstBox + e];
+            auto& box = anchors[storeAnchor (e)];
             box.dragging = false;
             if (owned)
             {
@@ -1325,7 +1360,7 @@ void FreakiePieEditor::syncStore()
             {
                 // out with its box (from the shop door, or wherever Trixie's bolt landed)
                 b->alive = true;
-                b->pos = anchors[firstBox + e].pos + Point<float> ((float) k * 14.0f - 21.0f, 6.0f);
+                b->pos = anchors[storeAnchor (e)].pos + Point<float> ((float) k * 14.0f - 21.0f, 6.0f);
                 b->vel = { -260.0f - rnd.nextFloat() * 160.0f, 60.0f + rnd.nextFloat() * 80.0f };
                 b->wet = 0.0f;
                 b->setVisible (true);
@@ -1959,7 +1994,8 @@ namespace
           "Each bunch has its own colour, and so does its bow." },
         { "The effects",
           "Your sound runs through four effects in a row.\n\n"
-          "First the spectral smear (the blue balloons), which blurs the sound across time. Spectral freeze holds it still.\n\n"
+          "First the spectral smear (the blue balloons), which blurs the sound across time. Spectral freeze holds it still. "
+          "Spectral tilt leans the smear from dark to bright: up lifts the highs and sinks the lows, down does the opposite, and the middle is flat. The smear stays about as loud either way.\n\n"
           "Then the pitch shifter. Shift picks the interval, snapped to the scale chosen on the card at the top left, and pitch feedback sends it round again so it keeps climbing.\n\n"
           "Then the grains, and last a reverb that keeps the low end clean. That's the order they start in: the order chapter says how to change it.\n\n"
           "Each effect has a mix balloon. When a mix balloon is empty, that effect is out of the way.\n\n"
@@ -1972,6 +2008,7 @@ namespace
           "Click freeze to hold the sound in place. Freeze fade sets how slowly it slides in and out of the freeze.\n\n"
           "These balloons also shape every frozen balloon you catch with the sound pump, even when the effects are bypassed." },
         { "The gumball machine",
+          "The gumball machine is sold at the balloon store. Buy it and it comes out in an orange gift box with four balloons, and takes its place on the shelf like the other effects; give it back (or pop one of its balloons) and the sound goes straight past it again.\n\n"
           "The orange bunch is a stutter that plays with the whole sound in time with your track (or at its own steady tempo when the track is stopped). "
           "On each sixteenth note it may grab the moment and do something with it.\n\n"
           "Stutter sets how often that happens. Bounce leans it from plain rolls and flams towards bouncing-ball repeats that speed up until they become a pitch, "
@@ -1980,7 +2017,7 @@ namespace
           "These ideas come from Alexander Mesker's study of Autechre's music: the bouncing ball, the event types, restarting patterns and the swing table.\n\n"
           "Now and then a pluck from the pop pump bounces too." },
         { "The order",
-          "The sound goes through the effects from left to right, from in to out: the spectral smear (blue), pitch (yellow), grains (mint), reverb (lilac), the gumball machine (orange) and a gift box for each effect from the store.\n\n"
+          "The sound goes through the effects from left to right, from in to out: the spectral smear (blue), pitch (yellow), grains (mint), reverb (lilac) and a gift box for each effect from the store, the gumball machine (orange) among them.\n\n"
           "The order list waits just off the left edge of the window. Move the cursor to the left edge and it slides out, with the effects from top (in) to bottom (out). Drag one up or down to move it: the others make room, and when you let go the bows hop to their new places and the sound follows with a tiny dip so it never clicks. The die at the top rolls a new order. The order is saved with your session.\n\n"
           "The loop (main feedback) and the caught sounds stay on the floor: the loop wraps round all the effects." },
         { "The pop pump",
@@ -2004,7 +2041,7 @@ namespace
           "Rain eases a gentle lowpass onto the output and soaks the balloons.\n\n"
           "When it's cloudy, clouds drift through the bouquet, and any balloon inside one slowly wanders to new values, with a little tag showing where it has got to. Clouds bring thunder too, which pulls the rain's lowpass down in slow rolls.\n\n"
           "In a storm, lightning strikes now and then and drops a random effect from the store into the room for a minute or so. If you like it, tick it in the store and it stays.\n\n"
-          "Snow freezes everything over the fade-in time: the sound slows until it stops completely and holds, and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over the fade-out time. Right-click the snowflake to set both times, anywhere from 5 seconds to 5 minutes: drag along a bar or scroll on it, and double-click puts it back to 5 seconds.\n\n"
+          "Snow freezes everything over the fade-in time: the sound slows until it stops completely and holds, and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over the fade-out time. Right-click the snowflake to set both times, anywhere from 5 seconds to 5 minutes: drag along a bar or scroll on it, and double-click puts it back to 5 seconds. Leave Pinkie out in the snow for a minute and she catches a cold; she perks up once the snow has gone.\n\n"
           "Snow and a heatwave never come together: turning one on sends the other away.\n\n"
           "A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.\n\n"
           "With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there." },
@@ -2453,7 +2490,7 @@ void FreakiePieEditor::trixieStep (float dt)
         if (v.gifts > 0 && (rnd.nextFloat() < 0.3f || v.t > 4.4f))
         {
             std::vector<int> notYet;
-            for (int e = 0; e < fp::StoreFX::kNum; ++e) if (! storeShown[e]) notYet.push_back (e);
+            for (int e = 0; e < kStoreItems; ++e) if (! storeShown[e]) notYet.push_back (e);
             if (! notYet.empty())
             {
                 const int e = notYet[(size_t) rnd.nextInt ((int) notYet.size())];
@@ -2735,9 +2772,14 @@ void FreakiePieEditor::pinStep (float dt)
         }
         // an effect from the store pops too (with the rest of its bunch: the effect goes back on the shelf)
         int bought = -1;
-        for (int e = 0; e < fp::StoreFX::kNum && bought < 0; ++e)
+        for (int e = 0; e < kStoreItems && bought < 0; ++e)
             for (auto* b : storeBalloons[e]) if (b == f) bought = e;
-        if (bought >= 0) { proc.popStruckRequest.fetch_or (1u << bought); setBought (bought, false); continue; }
+        if (bought >= 0)
+        {
+            if (bought != stutterItem) proc.popStruckRequest.fetch_or (1u << bought);
+            setBought (bought, false);
+            continue;
+        }
         else
         {
             // control balloons don't pop: they flinch away
@@ -3402,7 +3444,11 @@ void FreakiePieEditor::timerCallback()
     if (clock - lastSave > 2.0) { lastSave = clock; proc.saveLastState(); }
     {
         const bool scared = clock < scaredUntil;
-        const bool asleep = ! scared && clock - lastActivity > sleepAfter;
+        // how long she's been out in the snow: a minute and she's got a cold (too poorly to doze off) until it goes
+        if (snowVis > 0.3f) { if (snowSince < 0.0) snowSince = clock; }
+        else snowSince = -1.0;
+        const bool hasCold = snowSince >= 0.0 && clock - snowSince > coldAfter;
+        const bool asleep = ! scared && ! hasCold && clock - lastActivity > sleepAfter;
         auto toward = [dt] (float& v, bool on, float speed) { v += ((on ? 1.0f : 0.0f) - v) * jmin (1.0f, dt * speed); };
         toward (scaredVis, scared, 14.0f);
         toward (sleepVis, asleep, 1.5f);
@@ -3411,6 +3457,7 @@ void FreakiePieEditor::timerCallback()
         toward (umbrellaVis, ! scared && ! asleep && rainVis > 0.3f && ! hotRain, 3.0f);
         toward (crystalVis, ! scared && ! asleep && heliumVis > 0.3f, 4.0f);
         toward (snowyVis, ! scared && ! asleep && snowVis > 0.3f, 3.0f);
+        toward (coldVis, hasCold, 0.8f);
         toward (meltVis, ! scared && ! asleep && heatVis > 0.3f, 1.2f);   // she wilts slowly
     }
 
@@ -4618,7 +4665,7 @@ Rectangle<float> StoreShelves::tileArea (int i) const noexcept
 
 int StoreShelves::tileAt (Point<float> p) const noexcept
 {
-    for (int i = 0; i <= fp::StoreFX::kNum; ++i)
+    for (int i = 0; i <= FreakiePieEditor::kStoreItems; ++i)
         if (tileArea (i).contains (p)) return i;
     return -1;
 }
@@ -4667,11 +4714,11 @@ void StoreShelves::mouseDown (const MouseEvent& e)
     const int i = tileAt (e.position);
     if (i < 0 || ! opening) return;
     ed.noteActivity();
-    if (i == fp::StoreFX::kNum)
+    if (i == FreakiePieEditor::kStoreItems)
     {
         if (! std::any_of (std::begin (ed.storeShown), std::end (ed.storeShown), [] (bool b) { return b; })) return;
         ed.proc.popStruckRequest.fetch_or ((1u << fp::StoreFX::kNum) - 1u);
-        for (int fx = 0; fx < fp::StoreFX::kNum; ++fx) ed.setBought (fx, false);
+        for (int fx = 0; fx < FreakiePieEditor::kStoreItems; ++fx) ed.setBought (fx, false);
         return;
     }
     ed.setBought (i, ! ed.bought (i));
@@ -4711,7 +4758,7 @@ void StoreShelves::paint (Graphics& g)
     g.drawText ("Balloon Store", Rectangle<float> (0.0f, 22.0f, W, 34.0f), Justification::centred);
 
     const uint32 struck = ed.proc.struckMask.load();
-    for (int i = 0; i <= fp::StoreFX::kNum; ++i)
+    for (int i = 0; i <= FreakiePieEditor::kStoreItems; ++i)
     {
         const auto a = tileArea (i);
         const bool hov = i == hover;
@@ -4729,7 +4776,7 @@ void StoreShelves::paint (Graphics& g)
             g.setColour (Colour (0xffffd6e7));
             g.fillRoundedRectangle (a.reduced (3.0f, 0.0f), 10.0f);
         }
-        if (i == fp::StoreFX::kNum)
+        if (i == FreakiePieEditor::kStoreItems)
         {
             // "pop all": a pin in a pincushion
             const bool any = std::any_of (std::begin (ed.storeShown), std::end (ed.storeShown), [] (bool b) { return b; });
@@ -4745,7 +4792,7 @@ void StoreShelves::paint (Graphics& g)
             g.drawFittedText ("pop everything", a.withTop (a.getBottom() - 26.0f).toNearestInt(), Justification::centred, 2);
             continue;
         }
-        const bool owned = ed.bought (i), lent = ! owned && ((struck >> i) & 1u) != 0;
+        const bool owned = ed.bought (i), lent = ! owned && i != FreakiePieEditor::stutterItem && ((struck >> i) & 1u) != 0;
         const auto hue = ed.storeBalloons[i][0] != nullptr ? balloonColours (ed.storeBalloons[i][0]->hue).fill : Colour (0xffff8fb8);
         // the balloon: bobbing if you're pointing at it, swaying gently if it's yours
         const float bob = hov ? 2.5f * std::sin (t * 6.0f) : (owned ? 1.2f * std::sin (t * 2.0f + (float) i) : 0.0f);
@@ -4784,19 +4831,19 @@ void StoreShelves::paint (Graphics& g)
         }
         g.setFont (SadLookAndFeel::uiFont (10.5f, true));
         g.setColour (Colour (0xff4a2c4a));
-        g.drawFittedText (fp::StoreFX::infos()[(size_t) i].name, a.withTop (a.getBottom() - 24.0f).toNearestInt(), Justification::centred, 2);
+        g.drawFittedText (FreakiePieEditor::storeItemName (i), a.withTop (a.getBottom() - 24.0f).toNearestInt(), Justification::centred, 2);
     }
 
     // what the one you're pointing at does
     String line = "point at a balloon to see what it does";
-    if (hover >= 0 && hover < fp::StoreFX::kNum)
+    if (hover >= 0 && hover < FreakiePieEditor::kStoreItems)
     {
-        const auto& in = fp::StoreFX::infos()[(size_t) hover];
-        line = ed.bought (hover) ? String (in.name) + ": yours! click to pop it"
-             : ((struck >> hover) & 1u) != 0 ? String (in.name) + ": from the lightning! click to keep it"
-                                              : String (in.name) + ": " + in.c1.name + " + " + in.c2.name;
+        const auto name = FreakiePieEditor::storeItemName (hover);
+        line = ed.bought (hover) ? name + ": yours! click to pop it"
+             : hover != FreakiePieEditor::stutterItem && ((struck >> hover) & 1u) != 0 ? name + ": from the lightning! click to keep it"
+                                              : name + ": " + FreakiePieEditor::storeItemWhat (hover);
     }
-    else if (hover == fp::StoreFX::kNum) line = "pops every effect you bought";
+    else if (hover == FreakiePieEditor::kStoreItems) line = "pops every effect you bought";
     g.setFont (SadLookAndFeel::uiFont (11.0f, false));
     g.setColour (Colour (0xff9a6b8e));
     g.drawText (line, Rectangle<float> (12.0f, H - 28.0f, W - 24.0f, 20.0f), Justification::centred);

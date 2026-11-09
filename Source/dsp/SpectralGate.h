@@ -82,18 +82,25 @@ public:
     void setFreeze (bool on) noexcept { freezeOn = on; }
     float getFreezeAmount() const noexcept { return fz; }
 
-    // spectral tilt around 1 kHz, dB per octave
+    // spectral tilt around 1 kHz, dB per octave: above 0 the highs come up and the lows go down,
+    // below 0 the other way round. It's level-matched (equal loudness per octave, as pink noise
+    // has), so the tilt moves the balance without making the smear louder or quieter.
     void setTiltDb (float dbPerOct) noexcept
     {
         if (std::abs (dbPerOct - lastTilt) < 0.01f) return;
         if (tiltGain.empty()) return; // not prepared yet; prepare() re-applies
         lastTilt = dbPerOct;
+        double num = 0.0, den = 0.0;
         for (int k = 0; k < (int) tiltGain.size(); ++k)
         {
             const double f = std::max (30.0, (double) k * sr / (double) N);
             const double gDb = std::clamp ((double) dbPerOct * std::log2 (f / 1000.0), -30.0, 30.0);
-            tiltGain[(size_t) k] = (float) std::pow (10.0, gDb / 20.0);
+            const double g = std::pow (10.0, gDb / 20.0);
+            tiltGain[(size_t) k] = (float) g;
+            if (k > 0) { num += 1.0 / f; den += g * g / f; }
         }
+        const double norm = (dbPerOct == 0.0f || den <= 0.0) ? 1.0 : std::sqrt (num / den);
+        for (auto& g : tiltGain) g = (float) (g * norm);
     }
 
     // returns the wet (smeared) signal; latency is part of the smear character

@@ -56,7 +56,7 @@ file(GLOB BS_BACKGROUNDS ${CMAKE_CURRENT_SOURCE_DIR}/Resources/bg_*.jpg)
 juce_add_binary_data(BalloonShopAssets SOURCES
     Resources/pinkie_sitting.png Resources/pinkie_umbrella.png Resources/pinkie_crystal.png Resources/cheerilee.png
     Resources/pinkie_cower.png Resources/pinkie_scared.png Resources/pinkie_sleep.png
-    Resources/pinkie_snow.png Resources/pinkie_heat.png Resources/pinkie_wet.png
+    Resources/pinkie_snow.png Resources/pinkie_cold.png Resources/pinkie_heat.png Resources/pinkie_wet.png
     Resources/library.jpg Resources/twilight_reading.png Resources/trixie.png Resources/mlp_magic_is_friendship.ttf
     ${BS_BACKGROUNDS})
 

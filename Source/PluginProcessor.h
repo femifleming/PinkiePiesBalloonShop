@@ -40,6 +40,7 @@ namespace ids
     inline constexpr const char* helium     = "helium";   // gentle highpass on the master out
     // spectral smear
     inline constexpr const char* sgFreeze   = "sgFreeze";
+    inline constexpr const char* sgTilt     = "sgTilt";       // the smear's tilt: highs up and lows down, or the other way (dB per octave)
     // grains (also shape the frozen sound balloons)
     inline constexpr const char* grSize     = "grSize";
     inline constexpr const char* grDensity  = "grDensity";
@@ -58,6 +59,7 @@ namespace ids
     inline constexpr const char* stBounce   = "stBounce";     // straight rolls .. bouncing, grainy events
     inline constexpr const char* stSway     = "stSway";       // swing: every second 16th held back
     inline constexpr const char* stCutup    = "stCutup";      // events taken from other steps of the last bar
+    inline constexpr const char* stOwned    = "stOwned";      // bought at the balloon store (it isn't on the shelf until you buy it)
     inline constexpr const char* snow       = "snow";         // a master spectral freeze that comes in over the fade-in time
     inline constexpr const char* snowIn     = "snowIn";       // seconds for the snow to freeze everything (5 s .. 5 min)
     inline constexpr const char* snowOut    = "snowOut";      // seconds for it to thaw (5 s .. 5 min)
@@ -184,6 +186,7 @@ private:
     void timerCallback() override;
     std::atomic<float>* p_stAmount = nullptr; std::atomic<float>* p_stBounce = nullptr;
     std::atomic<float>* p_stSway = nullptr;   std::atomic<float>* p_stCutup = nullptr;
+    std::atomic<float>* p_stOwned = nullptr;  std::atomic<float>* p_sgTilt = nullptr;
 public:
     fp::Stutter stutter;   // (the editor watches its event counter)
 private:

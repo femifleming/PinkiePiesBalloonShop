@@ -45,6 +45,10 @@ struct FreakieTestAccess
     static Floater& balloon (FreakiePieEditor& e, int i) { return *e.floaters[i]; }
     static Point<float> bow (FreakiePieEditor& e) { return e.anchors[0].pos; }
     static int count (FreakiePieEditor& e) { return e.numParamBalloons; }
+    static float coldVis (FreakiePieEditor& e) { return e.coldVis; }
+    static constexpr int stutterItem = FreakiePieEditor::stutterItem;
+    static std::array<Balloon*, 4> stutterBalloons (FreakiePieEditor& e) { auto* b = e.storeBalloons[stutterItem]; return { b[0], b[1], b[2], b[3] }; }
+    static float sleepVis (FreakiePieEditor& e) { return e.sleepVis; }
     static void buy (FreakiePieEditor& e, int fx, bool b) { e.setBought (fx, b); }
     static std::vector<Balloon*> storeBalloonsAlive (FreakiePieEditor& e)
     {
@@ -1026,8 +1030,13 @@ int main (int argc, char** argv)
         run (1.0);   // (the mix balloons glide to zero after starting)
         run (1.0);
         const double untouchedBefore = maxErr;
+        // not bought yet: even at full stutter it stays out of the way
         *p.apvts.getRawParameterValue (ids::stAmount) = 1.0f;
         *p.apvts.getRawParameterValue (ids::stCutup) = 0.3f;
+        run (3.0);
+        const double untouchedUnbought = maxErr;
+        const int eventsUnbought = p.stutter.eventCount.load();
+        *p.apvts.getRawParameterValue (ids::stOwned) = 1.0f;   // bought at the store
         run (20.0);
         const int events = p.stutter.eventCount.load(), types = p.stutter.typesSeen.load();
         int kinds = 0; for (int k = 0; k < fp::Stutter::numTypes; ++k) kinds += (types >> k) & 1;
@@ -1035,9 +1044,74 @@ int main (int argc, char** argv)
         *p.apvts.getRawParameterValue (ids::stAmount) = 0.0f;
         run (1.5);
         run (1.0);
-        std::printf ("gumball machine: untouched while off (diff %g); full stutter for 20 s -> %d events of %d kinds, changed the sound by rms %.3f, peak %.2f, finite %d; off again -> diff %g\n",
-                     untouchedBefore, events, kinds, changed, pk, finite, maxErr);
-        if (untouchedBefore != 0.0 || events < 60 || kinds < fp::Stutter::numTypes || changed < 0.01 || pk > fp::PeakLimiter::ceiling || ! finite || maxErr != 0.0) FAIL_HERE();
+        const double offAgain = maxErr;
+        // bought again at full stutter, then given back to the store mid-stutter: it fades out and leaves the sound alone
+        *p.apvts.getRawParameterValue (ids::stAmount) = 1.0f;
+        run (2.0);
+        *p.apvts.getRawParameterValue (ids::stOwned) = 0.0f;
+        const int eventsAtReturn = p.stutter.eventCount.load();
+        run (0.5);
+        run (1.0);
+        const double givenBack = maxErr;
+        const bool noNewEvents = p.stutter.eventCount.load() == eventsAtReturn;
+        std::printf ("gumball machine: untouched while off (diff %g); not bought at full stutter -> diff %g, %d events; bought, full stutter for 20 s -> %d events of %d kinds, "
+                     "changed the sound by rms %.3f, peak %.2f, finite %d; off again -> diff %g; given back -> diff %g, new events %d\n",
+                     untouchedBefore, untouchedUnbought, eventsUnbought, events, kinds, changed, pk, finite, offAgain, givenBack, (int) ! noNewEvents);
+        if (untouchedBefore != 0.0 || untouchedUnbought != 0.0 || eventsUnbought != 0 || events < 60 || kinds < fp::Stutter::numTypes || changed < 0.01
+            || pk > fp::PeakLimiter::ceiling || ! finite || offAgain != 0.0 || givenBack != 0.0 || ! noNewEvents) FAIL_HERE();
+    }
+
+    // a session saved before the stutter was sold at the store: in use, it comes back already bought; unused, it stays in the store
+    {
+        for (float amount : { 0.6f, 0.0f })
+        {
+            FreakiePieProcessor a;
+            *a.apvts.getRawParameterValue (ids::stAmount) = amount;
+            auto xml = a.apvts.copyState().createXml();
+            for (auto* e : xml->getChildWithTagNameIterator ("PARAM"))
+                if (e->getStringAttribute ("id") == ids::stOwned) { xml->removeChildElement (e, true); break; }
+            MemoryBlock mb; AudioProcessor::copyXmlToBinary (*xml, mb);
+            FreakiePieProcessor b;
+            b.setStateInformation (mb.getData(), (int) mb.getSize());
+            const bool owned = *b.apvts.getRawParameterValue (ids::stOwned) > 0.5f;
+            std::printf ("old session, stutter at %.1f -> %s\n", amount, owned ? "bought" : "still in the store");
+            if (owned != (amount > 0.0f)) FAIL_HERE();
+        }
+    }
+
+    // the spectral smear's tilt: up brightens it, down darkens it, and on pink noise it stays about as loud
+    {
+        double hiLo[3] {}, rms[3] {};
+        const float tilts[3] = { -6.0f, 0.0f, 6.0f };
+        for (int t = 0; t < 3; ++t)
+        {
+            fp::SpectralGate sg;
+            sg.prepare (48000.0);
+            sg.setCutoffDb (-60.0f); sg.setKnee (1.0f); sg.setAttackMs (150.0f); sg.setSmearSeconds (3.0f); sg.setBlur (0.25f);
+            sg.setTiltDb (tilts[t]);
+            Random r (5);
+            float lpS = 0.0f, hpPrev = 0.0f, hpS = 0.0f, b0 = 0.0f, b1 = 0.0f, b2 = 0.0f;
+            double eLo = 0.0, eHi = 0.0, e = 0.0;
+            const int n = 48000 * 4;
+            for (int i = 0; i < n; ++i)
+            {
+                // pink noise (Paul Kellet's filter): equal energy per octave, roughly how music sits
+                const float w = r.nextFloat() * 2.0f - 1.0f;
+                b0 = 0.99765f * b0 + w * 0.0990460f; b1 = 0.96300f * b1 + w * 0.2965164f; b2 = 0.57000f * b2 + w * 1.0526913f;
+                const float x = 0.05f * (b0 + b1 + b2 + w * 0.1848f);
+                float l, rr;
+                sg.process (x, x, l, rr);
+                if (i < 48000 * 2) continue;   // let it settle
+                lpS += 0.02f * (l - lpS);                    // lows: a one-pole lowpass at ~150 Hz
+                hpS = 0.6f * (hpS + l - hpPrev); hpPrev = l;  // highs: a one-pole highpass at ~4 kHz
+                eLo += lpS * lpS; eHi += hpS * hpS; e += l * l;
+            }
+            hiLo[t] = 10.0 * std::log10 (eHi / std::max (1.0e-20, eLo));
+            rms[t] = 10.0 * std::log10 (e / (n / 2));
+        }
+        std::printf ("spectral tilt: highs over lows %.1f / %.1f / %.1f dB at -6 / 0 / +6 dB/oct; level %.1f / %.1f / %.1f dB\n",
+                     hiLo[0], hiLo[1], hiLo[2], rms[0], rms[1], rms[2]);
+        if (! (hiLo[0] < hiLo[1] - 10.0 && hiLo[2] > hiLo[1] + 10.0) || std::abs (rms[0] - rms[1]) > 6.0 || std::abs (rms[2] - rms[1]) > 6.0) FAIL_HERE();
     }
 
     // helpers for the tests below: a tone's amplitude in a stretch of signal
@@ -1715,12 +1789,39 @@ int main (int argc, char** argv)
             auto& ctl = FreakieTestAccess::balloon (e, 0);
             FreakieTestAccess::pinAt (e, ctl.pos, true);
             FreakieTestAccess::run (e, 0.1f);
-            const bool controlSurvived = FreakieTestAccess::count (e) == 25 + 44 && ctl.alive;
+            const bool controlSurvived = FreakieTestAccess::count (e) == 26 + 44 && ctl.alive;   // (26: the spectral tilt joined the blue bunch)
             FreakieTestAccess::pinAt (e, {}, false);
             FreakieTestAccess::run (e, 1.5f);
             const bool home = FreakieTestAccess::pinHomeDistance (e) < 2.0f;
             std::printf ("pin: popped a caught sound %d, control balloon only poked %d, flew home %d\n", poppedIt, controlSurvived, home);
             if (! poppedIt || ! controlSurvived || ! home) FAIL_HERE();
+        }
+
+        // the gumball machine comes from the store: not on the shelf until bought, then a box with its four
+        // balloons stands in the order with the rest; given back, it goes again
+        {
+            auto onShelf = [&e]
+            {
+                const auto items = FreakieTestAccess::shelfItems (e);
+                return std::find (items.begin(), items.end(), (int) fp::Engine::slotStutter) != items.end();
+            };
+            auto aliveCount = [&e]
+            {
+                int n = 0;
+                for (auto* b : FreakieTestAccess::stutterBalloons (e)) n += b != nullptr && b->alive && b->isVisible();
+                return n;
+            };
+            const bool before = onShelf(); const int balloonsBefore = aliveCount();
+            FreakieTestAccess::buy (e, FreakieTestAccess::stutterItem, true);
+            FreakieTestAccess::run (e, 1.5f);
+            const bool bought = onShelf() && *p.apvts.getRawParameterValue (ids::stOwned) > 0.5f; const int balloonsBought = aliveCount();
+            shoot ("_gumball_bought.png");
+            FreakieTestAccess::buy (e, FreakieTestAccess::stutterItem, false);
+            FreakieTestAccess::run (e, 0.5f);
+            const bool gone = ! onShelf() && aliveCount() == 0 && *p.apvts.getRawParameterValue (ids::stOwned) < 0.5f;
+            std::printf ("gumball machine in the store: on the shelf before buying %d (%d balloons), bought %d (%d balloons), given back %d\n",
+                         before, balloonsBefore, bought, balloonsBought, gone);
+            if (before || balloonsBefore != 0 || ! bought || balloonsBought != 4 || ! gone) FAIL_HERE();
         }
         if (auto* sb = FreakieTestAccess::firstSound (e))
         {
@@ -2204,6 +2305,16 @@ int main (int argc, char** argv)
             const float frost = FreakieTestAccess::balloon (e, 0).frost;
             const int flakes = FreakieTestAccess::flakes (e);
             shoot ("_snow.png");
+            // left out in the snow a minute more (nobody touching anything), she catches a cold instead of dozing off
+            const float coldEarly = FreakieTestAccess::coldVis (e);
+            for (int k = 0; k < (int) (62.0 * 48000 / 512); ++k)
+            {
+                p.processBlock (sil, mm);
+                uiDue += 512.0f / 48000.0f;
+                while (uiDue >= 1.0f / 60.0f) { uiDue -= 1.0f / 60.0f; FreakieTestAccess::run (e, 1.0f / 60.0f); }
+            }
+            const float coldLate = FreakieTestAccess::coldVis (e), sleepLate = FreakieTestAccess::sleepVis (e);
+            shoot ("_snow_cold.png");
             FreakieTestAccess::clickAt (e, FreakieTestAccess::snowButton (e));
             for (int k = 0; k < (int) (6.0 * 48000 / 512); ++k)
             {
@@ -2212,6 +2323,9 @@ int main (int argc, char** argv)
                 while (uiDue >= 1.0f / 60.0f) { uiDue -= 1.0f / 60.0f; FreakieTestAccess::run (e, 1.0f / 60.0f); }
             }
             const float thawed = FreakieTestAccess::balloon (e, 0).frost;
+            const float coldAfterThaw = FreakieTestAccess::coldVis (e);
+            std::printf ("pinkie in the snow: cold %.2f at 6 s, %.2f (asleep %.2f) after a minute more, %.2f once the snow has gone\n", coldEarly, coldLate, sleepLate, coldAfterThaw);
+            if (coldEarly > 0.01f || coldLate < 0.9f || sleepLate > 0.1f || coldAfterThaw > 0.2f) FAIL_HERE();
             std::printf ("snow in the shop: on %d, balloons iced %.2f, %d flakes in the air, thawed to %.2f after it stopped\n", on, frost, flakes, thawed);
             if (! on || frost < 0.9f || flakes < 20 || thawed > 0.05f) FAIL_HERE();
         }

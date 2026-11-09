@@ -39,7 +39,8 @@ class Stutter
 {
 public:
     enum Type { roll2 = 0, roll3, roll4, roll5, delay32, recursive, bounce, expand, freeze, jump, numTypes };
-    struct Settings { float amount = 0.0f, bounce = 0.5f, sway = 0.0f, cutup = 0.25f; };
+    // on: bought at the balloon store. Off, it fades out over 30 ms and then leaves the sound untouched.
+    struct Settings { float amount = 0.0f, bounce = 0.5f, sway = 0.0f, cutup = 0.25f; bool on = true; };
 
     void prepare (double sampleRate)
     {
@@ -49,6 +50,8 @@ public:
         mask = size - 1;
         for (auto& b : ring) b.assign ((size_t) size, 0.0f);
         fadeLen = std::max (16, (int) (0.0015 * sr));
+        presenceStep = (float) (1.0 / (0.03 * sr));
+        presence = set.on ? 1.0f : 0.0f;
         intervals.reserve (512); gains.reserve (512);
         rng.seed (0x57A7);
         now = 0; pos16 = 0.0; lastStep = -1; active = false; tail = 0; bpmKnown = 120.0;
@@ -78,9 +81,16 @@ public:
         if (k != lastStep)
         {
             lastStep = k;
-            if (set.amount > 0.0f) onStep (set);
+            if (set.on && set.amount > 0.0f) onStep (set);
         }
         pos16 += inc;
+
+        if (! set.on && presence <= 0.0f)
+        {
+            active = false; tail = 0;   // put away: the sound goes straight through
+            ++now;
+            return;
+        }
 
         if (active) render (xl, xr, l, r);
         else if (tail > 0)
@@ -88,6 +98,13 @@ public:
             const float g = 1.0f - (float) tail / (float) fadeLen;   // the dry sound comes back in
             l = xl * g; r = xr * g;
             --tail;
+        }
+        // bought or given back: a 30 ms crossfade between the stutter and the plain sound
+        if (! set.on || presence < 1.0f)
+        {
+            presence = std::clamp (presence + (set.on ? presenceStep : -presenceStep), 0.0f, 1.0f);
+            l = xl + presence * (l - xl);
+            r = xr + presence * (r - xr);
         }
         ++now;
     }
@@ -219,6 +236,7 @@ private:
     Settings set;
     std::vector<float> ring[2];
     int64_t mask = 0, now = 0, src = 0, lastStep = -1;
+    float presence = 1.0f, presenceStep = 0.001f;
     int fadeLen = 72, stepLen = 6000, grain = 0, tPos = 0, tail = 0;
     bool active = false, liveFirst = true;
     Type type = roll2;

@@ -142,9 +142,9 @@ public:
     void close();
     bool isOpen() const noexcept { return opening; }
     void step (float dt);   // the editor animates it
-    static constexpr int cols = 4, rows = 3;
-    static constexpr float W = 360.0f, H = 352.0f;
-    juce::Rectangle<float> tileArea (int i) const noexcept;   // i == StoreFX::kNum is the "pop all" tile
+    static constexpr int cols = 4, rows = 4;
+    static constexpr float W = 360.0f, H = 434.0f;
+    juce::Rectangle<float> tileArea (int i) const noexcept;   // i == FreakiePieEditor::kStoreItems is the "pop all" tile
     int tileAt (juce::Point<float>) const noexcept;
 private:
     FreakiePieEditor& ed;
@@ -543,7 +543,10 @@ private:
     bool autoOn() const noexcept   { return autoValue > 0.5f; }
     bool snowOn() const noexcept   { return snowValue > 0.5f; }
     bool bypassOn() const noexcept { return bypassValue > 0.5f; }
-    bool bought (int fx) const;    // bought at the store (not just lent by the lightning)
+    bool bought (int fx) const;    // bought at the store (not just lent by the lightning); fx: a store item (stutterItem is the gumball machine)
+    static juce::String storeItemName (int item);   // what the store calls it
+    static juce::String storeItemWhat (int item);   // its controls, for the store's hints
+    static juce::String ownedId (int item);         // its "bought" parameter
     bool heliumOn() const noexcept { return heliumValue > 0.5f; }
 
     Content content { *this };
@@ -565,6 +568,9 @@ private:
     int numParamBalloons = 0;
     Balloon* freezeBalloon = nullptr;
     static constexpr int firstBox = 7;
+    // what the store sells: its effects (fp::StoreFX), then the gumball machine (the stutter)
+    static constexpr int stutterItem = fp::StoreFX::kNum, kStoreItems = fp::StoreFX::kNum + 1;
+    static int storeAnchor (int item) noexcept { return item == stutterItem ? 4 : firstBox + item; }
     Anchor anchors[firstBox + fp::StoreFX::kNum];   // on the floor: 0 pink (the loop)  1 teal (caught sounds, frozen volume)
                                                     // on the shelf: 2 blue (spectral)  3 mint (grains)  4 orange (stutter)  5 yellow (pitch)  6 lilac (reverb)
                                                     // 7..: one gift box per store effect, shown while you have it
@@ -606,13 +612,16 @@ private:
     // (under an umbrella when it rains, with the rain bouncing off it); she holds what you buy at the store
     juce::Image pinkie, pinkieUmbrella, pinkieCower, pinkieScared, pinkieSleep, pinkieCrystal;   // crystal: while the helium's on
     juce::Image pinkieSnow, pinkieHeat, pinkieWet;   // bundled up in the snow; melted flat in the heat; soaked flat in a hot rain
+    juce::Image pinkieCold;                          // left out in the snow too long: she's caught a cold
     float pinkieHop = 0.0f, pinkieHopVel = 0.0f;
     // her moods: a pop scares her for a moment (two pictures, taking turns); leave the plugin
     // alone for a while and she falls asleep
     double scaredUntil = -1.0, lastActivity = 0.0;
     bool scaredAlt = false;
-    float scaredVis = 0.0f, sleepVis = 0.0f, umbrellaVis = 0.0f, crystalVis = 0.0f, snowyVis = 0.0f, meltVis = 0.0f, wetVis = 0.0f;
+    float scaredVis = 0.0f, sleepVis = 0.0f, umbrellaVis = 0.0f, crystalVis = 0.0f, snowyVis = 0.0f, coldVis = 0.0f, meltVis = 0.0f, wetVis = 0.0f;
     static constexpr double sleepAfter = 45.0;
+    static constexpr double coldAfter = 60.0;   // a minute out in the snow and she catches a cold
+    double snowSince = -1.0;                     // when the snow last came in (-1: it isn't snowing)
     void noteActivity() noexcept { lastActivity = clock; }
 
     // presets: a picture behind everything, fading across when the preset changes, and the
@@ -708,8 +717,8 @@ private:
 
     // the balloon store: a sign at the top; what you buy comes as four balloons (its two controls, level, pan)
     juce::Rectangle<float> storeSign { 832.0f, 8.0f, 96.0f, 38.0f };   // just the board (no awning)
-    Balloon* storeBalloons[fp::StoreFX::kNum][4] {};
-    bool storeShown[fp::StoreFX::kNum] {};
+    Balloon* storeBalloons[kStoreItems][4] {};
+    bool storeShown[kStoreItems] {};
     void openStore();
     void setBought (int fx, bool bought);
     void syncStore();

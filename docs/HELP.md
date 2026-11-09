@@ -51,7 +51,7 @@ Each bunch has its own colour, and so does its bow.
 
 Your sound runs through four effects in a row.
 
-First the spectral smear (the blue balloons), which blurs the sound across time. Spectral freeze holds it still.
+First the spectral smear (the blue balloons), which blurs the sound across time. Spectral freeze holds it still. Spectral tilt leans the smear from dark to bright: up lifts the highs and sinks the lows, down does the opposite, and the middle is flat. The smear stays about as loud either way.
 
 Then the pitch shifter. Shift picks the interval, snapped to the scale chosen on the card at the top left, and pitch feedback sends it round again so it keeps climbing.
 
@@ -75,6 +75,8 @@ These balloons also shape every frozen balloon you catch with the sound pump, ev
 
 ## The gumball machine
 
+The gumball machine is sold at the balloon store. Buy it and it comes out in an orange gift box with four balloons, and takes its place on the shelf like the other effects; give it back (or pop one of its balloons) and the sound goes straight past it again.
+
 The orange bunch is a stutter that plays with the whole sound in time with your track (or at its own steady tempo when the track is stopped). On each sixteenth note it may grab the moment and do something with it.
 
 Stutter sets how often that happens. Bounce leans it from plain rolls and flams towards bouncing-ball repeats that speed up until they become a pitch, slowing ones that do the opposite, and frozen buzzing grains. Cut-up lets it pull its sound from other steps of the last bar, so the bar gets rearranged like a breakbeat. Sway holds back every second sixteenth, from a gentle swing to a stumble.
@@ -85,7 +87,7 @@ Now and then a pluck from the pop pump bounces too.
 
 ## The order
 
-The sound goes through the effects from left to right, from in to out: the spectral smear (blue), pitch (yellow), grains (mint), reverb (lilac), the gumball machine (orange) and a gift box for each effect from the store.
+The sound goes through the effects from left to right, from in to out: the spectral smear (blue), pitch (yellow), grains (mint), reverb (lilac) and a gift box for each effect from the store, the gumball machine (orange) among them.
 
 ![The order list](help/order.jpg)
 
@@ -133,7 +135,7 @@ When it's cloudy, clouds drift through the bouquet, and any balloon inside one s
 
 In a storm, lightning strikes now and then and drops a random effect from the store into the room for a minute or so. If you like it, tick it in the store and it stays.
 
-Snow freezes everything over the fade-in time: the sound slows until it stops completely and holds, and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over the fade-out time. Right-click the snowflake to set both times, anywhere from 5 seconds to 5 minutes: drag along a bar or scroll on it, and double-click puts it back to 5 seconds.
+Snow freezes everything over the fade-in time: the sound slows until it stops completely and holds, and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over the fade-out time. Right-click the snowflake to set both times, anywhere from 5 seconds to 5 minutes: drag along a bar or scroll on it, and double-click puts it back to 5 seconds. Leave Pinkie out in the snow for a minute and she catches a cold; she perks up once the snow has gone.
 
 Snow and a heatwave never come together: turning one on sends the other away.
 

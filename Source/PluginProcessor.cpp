@@ -151,6 +151,16 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
                                              return String (roundToInt (v * 100.0f)) + " % wide";
                                          })));
     }
+
+    // the gumball machine (the stutter) is sold at the balloon store too
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::stOwned, 1 }, "Stutter Bought", false));
+    // the spectral smear's tilt: up brightens it (the highs up, the lows down), down darkens it
+    layout.add (std::make_unique<F> (ParameterID { ids::sgTilt, 1 }, "Spectral Tilt", NormalisableRange<float> (-6.0f, 6.0f), 0.0f,
+                                     A().withLabel ("dB/oct").withStringFromValueFunction ([] (float v, int)
+                                     {
+                                         if (std::abs (v) < 0.05f) return String ("flat");
+                                         return (v > 0 ? "+" : "") + String (v, 1) + " dB/oct " + (v > 0 ? "brighter" : "darker");
+                                     })));
     return layout;
 }
 
@@ -177,6 +187,7 @@ FreakiePieProcessor::FreakiePieProcessor()
     p_stAmount = get (ids::stAmount); p_stBounce = get (ids::stBounce);
     p_stSway = get (ids::stSway);     p_stCutup = get (ids::stCutup);
     p_sgFreeze = get (ids::sgFreeze);
+    p_stOwned = get (ids::stOwned);   p_sgTilt = get (ids::sgTilt);
     p_grSize = get (ids::grSize);      p_grDensity = get (ids::grDensity); p_grShape = get (ids::grShape);
     p_grPan = get (ids::grPan);        p_grReverse = get (ids::grReverse);
     p_grPos = get (ids::grPos);        p_grPosRand = get (ids::grPosRand);
@@ -290,7 +301,7 @@ fp::EngineParams FreakiePieProcessor::readParams() const
     p.sgKnee       = 1.0f;
     p.sgBlur       = 0.25f;
     p.sgScatter    = 0.0f;
-    p.sgTilt       = 0.0f;
+    p.sgTilt       = p_sgTilt->load();
     p.sgFreeze     = p_sgFreeze->load() > 0.5f;
     p.grSizeMs     = p_grSize->load();
     p.grDensity    = p_grDensity->load();
@@ -460,6 +471,7 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         fp::Stutter::Settings ss;
         ss.amount = p_stAmount->load(); ss.bounce = p_stBounce->load();
         ss.sway = p_stSway->load();     ss.cutup = p_stCutup->load();
+        ss.on = p_stOwned->load() > 0.5f;
         stutter.begin (ss, bpm, ppq, playing);
     }
     {
@@ -618,7 +630,17 @@ void FreakiePieProcessor::setStateInformation (const void* data, int sizeInBytes
 
 void FreakiePieProcessor::loadStateXml (const XmlElement& xml)
 {
+    // sessions from before the stutter was sold at the store: if it was in use, it comes already bought
+    bool knowsOwned = false;
+    float oldStutter = 0.0f;
+    for (auto* e : xml.getChildWithTagNameIterator ("PARAM"))
+    {
+        if (e->getStringAttribute ("id") == ids::stOwned) knowsOwned = true;
+        if (e->getStringAttribute ("id") == ids::stAmount) oldStutter = (float) e->getDoubleAttribute ("value");
+    }
     apvts.replaceState (ValueTree::fromXml (xml));
+    if (! knowsOwned && oldStutter > 0.0f)
+        if (auto* prm = apvts.getParameter (ids::stOwned)) prm->setValueNotifyingHost (1.0f);
     const auto pts = StringArray::fromTokens (apvts.state.getProperty ("chalk").toString(), " ", "");
     if (pts.size() == fp::ChalkShape::N)
     {
