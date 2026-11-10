@@ -34,7 +34,7 @@ static Run render (FreakiePieProcessor& p, int outCh, double seconds, Gen gen, b
     {
         juce::AudioProcessor::BusesLayout layout;
         layout.inputBuses.add (juce::AudioChannelSet::stereo());
-        layout.outputBuses.add (outCh == 16 ? juce::AudioChannelSet::discreteChannels (16) : juce::AudioChannelSet::stereo());
+        layout.outputBuses.add (outCh > 2 ? juce::AudioChannelSet::discreteChannels (outCh) : juce::AudioChannelSet::stereo());
         p.setBusesLayout (layout);
         p.setRateAndBufferSizeDetails (SR, BLOCK);
         p.prepareToPlay (SR, BLOCK);
@@ -250,6 +250,113 @@ int main (int argc, char** argv)
         FreakiePieProcessor::decorrelateCopies = true;
         const double yw0 = rms (r.out[1], (size_t) SR) / rms (r.out[0], (size_t) SR);
         check (yw0 < 0.2, "(control: without the decorrelators the two copies were one coherent, phasing sound)", "Y / W " + juce::String (yw0, 2));
+    }
+
+    std::printf ("higher orders (up to 7th, 64 channels)\n");
+    {
+        // the harmonics themselves, at every order: SN3D means each order l has mean square 1/(2l+1) over
+        // the sphere, and every pair of channels is orthogonal (averaged over 20000 even points)
+        const auto pts = ambi::fibonacci (20000);
+        std::vector<double> gram ((size_t) ambi::kCh * ambi::kCh, 0.0);
+        for (auto& d : pts)
+        {
+            const auto y = ambi::sh (d, 7);
+            for (int a = 0; a < ambi::kCh; ++a)
+                for (int b = a; b < ambi::kCh; ++b) gram[(size_t) (a * ambi::kCh + b)] += (double) y[(size_t) a] * y[(size_t) b];
+        }
+        double worstNorm = 0, worstOrtho = 0;
+        for (int a = 0; a < ambi::kCh; ++a)
+            for (int b = a; b < ambi::kCh; ++b)
+            {
+                const double v = gram[(size_t) (a * ambi::kCh + b)] / (double) pts.size();
+                if (a == b) worstNorm = std::max (worstNorm, std::abs (v * (2 * ambi::orderOf (a) + 1) - 1.0));
+                else worstOrtho = std::max (worstOrtho, std::abs (v));
+            }
+        check (worstNorm < 0.002 && worstOrtho < 0.002, "all 64 harmonics to 7th order: SN3D scaling and orthogonal",
+               "worst scaling error " + juce::String (worstNorm, 5) + ", worst overlap " + juce::String (worstOrtho, 5));
+        // and two written out by hand (4th order): ACN 20 = (35 z^4 - 30 z^2 + 3) / 8, ACN 24 = sqrt(35) / 8 (x^4 - 6 x^2 y^2 + y^4)
+        const auto d = ambi::fromAzEl (0.6f, 0.3f);
+        const auto y = ambi::sh (d, 4);
+        const double a20 = (35.0 * std::pow (d.z, 4) - 30.0 * d.z * d.z + 3.0) / 8.0;
+        const double a24 = std::sqrt (35.0) / 8.0 * (std::pow (d.x, 4) - 6.0 * d.x * d.x * d.y * d.y + std::pow (d.y, 4));
+        check (std::abs (y[20] - a20) < 1e-5 && std::abs (y[24] - a24) < 1e-5, "4th order written out by hand matches",
+               juce::String (y[20], 5) + " / " + juce::String (a20, 5) + ", " + juce::String (y[24], 5) + " / " + juce::String (a24, 5));
+
+        // the plug-in at 5th and 7th order: every output channel is its harmonic, as at 3rd
+        for (int order : { 5, 7 })
+        {
+            const int nch = ambi::chFor (order);
+            double worst = 0;
+            fp::DistanceSource::withWalls = false;
+            for (auto dd : { ambi::fromAzEl (0.7f, 0.4f), ambi::fromAzEl (-2.3f, -0.6f) })
+            {
+                FreakiePieProcessor p;
+                allOff (p);
+                setParam (p, ids::ambiOrder, (float) (order - 1));
+                p.srcX.store (dd.x); p.srcY.store (dd.y); p.srcZ.store (dd.z);
+                auto r = render (p, nch, 1.0, stereoNoise);
+                const auto yy = ambi::sh (dd, order);
+                double w2 = 0;
+                for (size_t i = (size_t) SR / 2; i < r.out[0].size(); ++i) w2 += (double) r.out[0][i] * r.out[0][i];
+                for (int c = 0; c < nch; ++c)
+                {
+                    double cw = 0;
+                    for (size_t i = (size_t) SR / 2; i < r.out[0].size(); ++i) cw += (double) r.out[(size_t) c][i] * r.out[0][i];
+                    worst = std::max (worst, std::abs (cw / w2 - yy[(size_t) c]));
+                }
+                if (p.orderNow.load() != order) worst = 1.0;
+            }
+            fp::DistanceSource::withWalls = true;
+            check (worst < 0.005, (juce::String (order) + (order == 5 ? "th" : "th") + " order: all " + juce::String (nch) + " channels are their harmonics").toRawUTF8(),
+                   "worst error " + juce::String (worst, 5));
+        }
+        // the order asked for, but a track with fewer channels: the highest that fits
+        {
+            FreakiePieProcessor p;
+            allOff (p);
+            setParam (p, ids::ambiOrder, 6.0f);   // 7th
+            render (p, 36, 0.2, stereoNoise, false);
+            check (p.orderNow.load() == 5, "7th order asked for on a 36-channel track: 5th comes out", "order " + juce::String (p.orderNow.load()));
+        }
+        // sharper: a decoder of the same order hears a point source narrower at 7th order than at 3rd
+        auto spread = [&] (int order)
+        {
+            const auto dirs = ambi::fibonacci (2000);
+            const auto D = ambi::samplingDecoder (dirs, order);
+            const auto y = ambi::sh ({ 1, 0, 0 }, order);
+            double e = 0, ec = 0;
+            for (size_t k = 0; k < dirs.size(); ++k)
+            {
+                double v = 0;
+                for (int c = 0; c < ambi::chFor (order); ++c) v += D[k][(size_t) c] * y[(size_t) c];
+                e += v * v;
+                if (dirs[k].x > std::cos (0.35)) ec += v * v;   // within 20 degrees
+            }
+            return ec / e;
+        };
+        check (spread (7) > spread (3) + 0.2, "a point is sharper at 7th order (energy within 20 degrees of it)",
+               juce::String (juce::roundToInt (spread (3) * 100.0)) + " % at 3rd order, " + juce::String (juce::roundToInt (spread (5) * 100.0)) + " % at 5th, " + juce::String (juce::roundToInt (spread (7) * 100.0)) + " % at 7th");
+        // the whole sphere at 7th order: 16 grains, the reverb, the weather; finite, under the ceiling, and what it costs
+        for (int order : { 5, 7 })
+        {
+            FreakiePieProcessor p;
+            p.setCurrentProgram (0);
+            setParam (p, ids::ambiOrder, (float) (order - 1));
+            setParam (p, ids::grains, 16.0f); setParam (p, ids::flight, 1.0f); setParam (p, ids::flightSpeed, 0.8f);
+            setParam (p, ids::cloudy, 1.0f); setParam (p, ids::rain, 1.0f);
+            auto r = render (p, ambi::chFor (order), 6.0, plucks, false);
+            check (r.finite && r.peak <= 0.892f, (juce::String ("16 grains at ") + juce::String (order) + "th order: finite, under the ceiling").toRawUTF8(),
+                   "peak " + juce::String (db (r.peak), 1) + " dBFS, " + juce::String (r.cpu / r.seconds * 100.0, 1) + " % of real time");
+        }
+        {
+            // the snow on all 64 channels (the heaviest master stage)
+            FreakiePieProcessor p;
+            allOff (p);
+            setParam (p, ids::ambiOrder, 6.0f);
+            setParam (p, ids::snowIn, 5.0f); setParam (p, ids::snow, 1.0f);
+            auto r = render (p, 64, 6.0, plucks, false);
+            check (r.finite && r.peak <= 0.892f, "snow at 7th order: finite, under the ceiling", juce::String (r.cpu / r.seconds * 100.0, 1) + " % of real time");
+        }
     }
 
     std::printf ("frozen balloons\n");

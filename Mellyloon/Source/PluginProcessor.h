@@ -75,6 +75,7 @@ namespace ids
     inline constexpr const char* cloudy     = "cloudy";       // clouds drift among the balloons; thunder; with rain, lightning
     inline constexpr const char* fxBypass   = "fxBypass";
     // the sphere
+    inline constexpr const char* ambiOrder  = "ambiOrder";    // the Ambisonic order put out: 1st .. 7th (4 .. 64 channels)
     inline constexpr const char* doppler    = "doppler";      // things moving bend in pitch (on) or keep it (off)
     inline constexpr const char* grainMode  = "grainMode";    // copies: each grain is a whole copy of the chain; scatter: one chain, its grains fly about
     inline constexpr const char* grains     = "grains";       // how many copies of the whole chain fly in the sphere (1..16)
@@ -221,6 +222,7 @@ public:
     struct PatchView { std::atomic<float> x { 0.0f }, y { 0.0f }, z { 0.0f }, radius { 0.4f }, amount { 0.0f }; };
     std::array<PatchView, fp::SkyPatches::kNum> patchView;
     fp::ambi::EnergyMeter energy;            // the spatial level meter (the editor reads it)
+    std::atomic<int> orderNow { 3 };          // the order coming out right now (the setting, or less if the track has too few channels)
     std::atomic<bool> ambiFallback { false }; // the track has fewer than 16 channels (only the first ones come out)
     std::atomic<int> outChannels { 2 };
     // the editor holds a grain (its index, or -1) and puts it somewhere
@@ -281,7 +283,10 @@ private:
     float popsThruSm = 0.0f;
     bool snowWasOn = false, heatWasOn = false;   // (the snow and the heat never fall together: see timerCallback)
     juce::AudioBuffer<float> scratch, chainIn;   // chainIn: the input plus the inflation tone, for the effect chain
-    static constexpr int kPairs = 8;   // the master stages run on the scene's channels two at a time
+    static constexpr int kPairs = 32;  // the master stages run on the scene's channels two at a time (64 at 7th order)
+    std::atomic<int> preparedPairs { 0 };   // how many of them are ready (the snow and the heat are big: made as the order needs them)
+    double preparedRate = 0.0;
+    void preparePairs (int upTo);
     std::array<fp::Weather, kPairs> weather;
     fp::MultiLeveler leveler;
     fp::MultiLimiter limiter;
@@ -338,6 +343,7 @@ private:
     std::atomic<float>* p_grainsLevel = nullptr;
     std::atomic<float>* p_grains = nullptr; std::atomic<float>* p_deviate = nullptr; std::atomic<float>* p_flight = nullptr;
     std::atomic<float>* p_flightSpeed = nullptr; std::atomic<float>* p_spread = nullptr;
+    std::atomic<float>* p_ambiOrder = nullptr;
     std::atomic<float>* p_grainMode = nullptr; std::atomic<float>* p_doppler = nullptr;
     float grainsLevelSm = 1.0f;
     std::array<std::atomic<int>, fp::Engine::kSlots> shelf {};

@@ -190,6 +190,8 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
     layout.add (std::make_unique<F> (ParameterID { ids::spread, 1 }, "Distance", NormalisableRange<float> (0.0f, 1.0f), 0.5f,
                                      A().withStringFromValueFunction ([] (float v, int) { const float m = FreakiePieProcessor::bubbleMetres (v); return (m < 10.0f ? String (m, 1) : String (roundToInt (m))) + " m bubble"; })));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::doppler, 1 }, "Doppler", true));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ids::ambiOrder, 1 }, "Ambisonic Order",
+                                                        StringArray { "1st", "2nd", "3rd", "4th", "5th", "6th", "7th" }, 2));
     return layout;
 }
 
@@ -197,9 +199,14 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
 // or two for binaural and stereo. The standalone app opens in stereo.
 AudioProcessor::BusesProperties FreakiePieProcessor::sphereBuses()
 {
+    // as an Audio Unit 3rd order (16 channels) is published (the hosts' Ambisonics go to 3rd order), and in the
+    // desktop app; everywhere else up to 7th (64 channels), so a track with that many has room for it. The order
+    // setting says how many are used.
+    const auto t = PluginHostType::getPluginLoadedAs();
+    const bool third = t == AudioProcessor::wrapperType_AudioUnit || t == AudioProcessor::wrapperType_Standalone;   // (and the desktop app: an audio device rarely has 64 outputs)
     return BusesProperties()
         .withInput  ("Input",  AudioChannelSet::stereo(), true)
-        .withOutput ("Output", AudioChannelSet::ambisonic (3), true);   // (published as ACN/SN3D 3rd order: the AU host checks the default is one it can see)
+        .withOutput ("Output", AudioChannelSet::ambisonic (third ? 3 : 7), true);
 }
 
 FreakiePieProcessor::FreakiePieProcessor()
@@ -239,7 +246,7 @@ FreakiePieProcessor::FreakiePieProcessor()
             p_store[e][k] = apvts.getRawParameterValue (ids::store (e, (ids::StorePart) k));
     p_grains = get (ids::grains); p_deviate = get (ids::deviate); p_flight = get (ids::flight);
     p_flightSpeed = get (ids::flightSpeed); p_spread = get (ids::spread);
-    p_grainMode = get (ids::grainMode); p_doppler = get (ids::doppler);
+    p_grainMode = get (ids::grainMode); p_ambiOrder = get (ids::ambiOrder); p_doppler = get (ids::doppler);
     for (int v = 0; v < kGrains; ++v)
     {
         auto g = std::make_unique<Grain>();
@@ -338,9 +345,15 @@ bool FreakiePieProcessor::isBusesLayoutSupported (const BusesLayout& layouts) co
 {
     const auto out = layouts.getMainOutputChannelSet();
     const auto in  = layouts.getMainInputChannelSet();
-    // 16 plain channels too (some hosts ask for those), except as an Audio Unit, which only publishes the ambisonic layout
-    const bool discrete16 = out == AudioChannelSet::discreteChannels (16) && wrapperType != wrapperType_AudioUnit;
-    if (out != AudioChannelSet::stereo() && out != AudioChannelSet::mono() && ! discrete16 && out != AudioChannelSet::ambisonic (3)) return false;
+    // any Ambisonic order from 1st to 7th, the same counts of plain channels (some hosts ask for those; not as
+    // an Audio Unit, which only publishes the ambisonic layouts), or stereo and mono (only the first ones come out)
+    bool ok = out == AudioChannelSet::stereo() || out == AudioChannelSet::mono();
+    for (int o = 1; o <= fp::ambi::kMaxOrder; ++o)
+    {
+        ok = ok || out == AudioChannelSet::ambisonic (o);
+        ok = ok || (out == AudioChannelSet::discreteChannels (fp::ambi::chFor (o)) && wrapperType != wrapperType_AudioUnit);
+    }
+    if (! ok) return false;
     return in == AudioChannelSet::mono() || in == AudioChannelSet::stereo();
 }
 
@@ -408,10 +421,9 @@ void FreakiePieProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     }
     voiceNormSm = 1.0f / std::sqrt ((float) count);
     sky.prepare (0x5C1E);
-    for (auto& w : weather) w.prepare (sampleRate);
-    for (auto& e : masterEq) e.prepare (sampleRate);
-    for (auto& f : snowFreeze) f->prepare (sampleRate);
-    for (auto& h : heatWave) h->prepare (sampleRate);
+    preparedRate = sampleRate;
+    preparedPairs.store (0);
+    preparePairs ((fp::ambi::chFor (jmax (3, 1 + (int) std::lround (p_ambiOrder->load()))) + 1) / 2);
     balloonFX.prepare (sampleRate);
     storeFX.prepare (sampleRate);
     leveler.prepare (sampleRate);
@@ -609,6 +621,17 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
             s.width = p_store[e][ids::storeWidth]->load();
         }
     }
+
+    // the order: the setting, or as high as fits in the channels the track gives (a stereo track still gets the
+    // setting, and only its first channels come out), and as high as the master stages are ready for
+    int aOrder = jlimit (1, fp::ambi::kMaxOrder, 1 + (int) std::lround (p_ambiOrder->load()));
+    if (numOut >= 4) aOrder = jmin (aOrder, fp::ambi::orderFor (numOut));
+    while (aOrder > 1 && fp::ambi::chFor (aOrder) > 2 * preparedPairs.load()) --aOrder;
+    const int nch = fp::ambi::chFor (aOrder);
+    orderNow.store (aOrder);
+    sphereVerb.setChannels (nch);
+    srcDist.order = popsDist.order = rbDiveDist.order = rbBoomDist.order = aOrder;
+    for (auto& g : grainsArr) g->dist.order = aOrder;
 
     // the sphere: where the grains are, and the weather drifting through it
     const int points = jlimit (1, kGrains, (int) std::lround (p_grains->load()));   // how many places fly in the sphere
@@ -817,13 +840,14 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         gs.freeze = p_grFreeze->load() > 0.5f;
         gs.numPlaces = points;
         gs.radiusM = sphereMetres;
+        gs.order = aOrder;
         for (int k = 0; k < points; ++k) gs.places[(size_t) k] = flightPaths.position (k);
         const float bypassAvg = 0.5f * (ramp[0] + ramp[(size_t) n - 1]);
         const float level = grWet * (1.0f - bypassAvg);
         grainBus.clear (0, n);
         if (level > 0.0f || granulator.activeGrains() > 0)
             granulator.process (cL, cR, grainBus.getArrayOfWritePointers(), n, gs, level);
-        for (int c = 0; c < fp::ambi::kCh; ++c)
+        for (int c = 0; c < nch; ++c)
         {
             FloatVectorOperations::add (busW[c], grainBus.getReadPointer (c), n);
             FloatVectorOperations::addWithMultiply (sendW[c], grainBus.getReadPointer (c), 0.8f, n);
@@ -920,25 +944,26 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
                 verbMixSm += k * (target - verbMixSm);
                 const float a = verbMixSm * MathConstants<float>::halfPi;
                 const float dry = std::cos (a), wet = std::sin (a);
-                for (int c = 0; c < fp::ambi::kCh; ++c) busW[c][i] = dry * busW[c][i] + wet * vb[c][i];
+                for (int c = 0; c < nch; ++c) busW[c][i] = dry * busW[c][i] + wet * vb[c][i];
             }
             if (target == 0.0f && verbMixSm < 1.0e-4f) verbMixSm = 0.0f;
         }
     }
     energy.process (bus.getArrayOfReadPointers(), n);
 
-    // out: the 16 channels (3rd-order Ambisonics, ACN / SN3D). On a track with fewer, only the first
-    // ones come out, and the map says so.
-    ambiFallback.store (numOut < fp::ambi::kCh);
+    // out: Ambisonics at the order worked out above (ACN / SN3D, 16 channels at 3rd order, 64 at 7th). On a
+    // track with fewer channels than that, only the first ones come out, and the map says so.
+    ambiFallback.store (numOut < nch);
     outChannels.store (numOut);
     float* chans[fp::ambi::kCh] {};
-    const int C = fp::ambi::kCh;
-    for (int c = 0; c < C; ++c) chans[c] = busW[c];
+    const int C = nch;
+    for (int c = 0; c < fp::ambi::kCh; ++c) chans[c] = busW[c];
+    const int pairsNow = (C + 1) / 2;
 
     // the master: weather, heat, snow and the chalkboard EQ, two channels at a time, then the leveler and limiter, linked
     const bool rainOn = p_rain->load() > 0.5f, heliumOn = p_helium->load() > 0.5f, cloudOn = p_cloudy->load() > 0.5f;
     const bool heatOn = p_heat->load() > 0.5f, snowOn = p_snow->load() > 0.5f;
-    for (int k = 0; k < C / 2; ++k)
+    for (int k = 0; k < pairsNow; ++k)
     {
         auto& w = weather[(size_t) k];
         w.process (chans[2 * k], chans[2 * k + 1], n, rainOn, heliumOn, cloudOn);
@@ -948,7 +973,7 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         snowFreeze[(size_t) k]->process (chans[2 * k], chans[2 * k + 1], n, snowOn);
         masterEq[(size_t) k].process (chans[2 * k], chans[2 * k + 1], n, eq);
     }
-    for (int k = C / 2; k < kPairs; ++k)   // the pairs resting this block keep up with the switches, quietly
+    for (int k = pairsNow; k < preparedPairs.load(); ++k)   // the pairs resting this block keep up with the switches, quietly
     {
         float* z0 = verbBus.getWritePointer (0);
         float* z1 = verbBus.getWritePointer (1);
@@ -1122,6 +1147,7 @@ void FreakiePieProcessor::rainboomBlock (const float* inL, const float* inR, flo
     rbBoomDist.process (t, n, rbAt, sphereMetres, busW, sendW, 0.6f);
 
     // the rings
+    const int nch = fp::ambi::chFor (orderNow.load());
     const double since = rainboom.secondsSinceBoom();
     const float inv = 1.0f / (float) n;
     for (int k = 0; k < fp::Rainboom::kBands; ++k)
@@ -1135,12 +1161,12 @@ void FreakiePieProcessor::rainboomBlock (const float* inL, const float* inR, flo
             const Vec3 q = rbAt + Vec3 { std::cos (a), std::sin (a), 0.0f } * r;
             const float d = q.length();
             const float g = jmin (1.0f, 0.6f / jmax (0.05f, d)) / (float) N;
-            const auto e = d <= 1.0f ? fp::ambi::encodeNear (q) : fp::ambi::sh (q.normalised());
-            for (int ch = 0; ch < fp::ambi::kCh; ++ch) c[(size_t) ch] += g * e[(size_t) ch];
+            const auto e = d <= 1.0f ? fp::ambi::encodeNear (q, orderNow.load()) : fp::ambi::sh (q.normalised(), orderNow.load());
+            for (int ch = 0; ch < nch; ++ch) c[(size_t) ch] += g * e[(size_t) ch];
         }
         const float* y = rainboom.band (k);
         auto& was = rbRingWas[(size_t) k];
-        for (int ch = 0; ch < fp::ambi::kCh; ++ch)
+        for (int ch = 0; ch < nch; ++ch)
         {
             const float c0 = was[(size_t) ch], dc = (c[(size_t) ch] - c0) * inv;
             float* o = busW[ch];
@@ -1247,7 +1273,7 @@ void FreakiePieProcessor::resetToNormal()
 
 bool FreakiePieProcessor::trixieMayTouch (const String& id)
 {
-    for (auto* no : { ids::rbBoom, ids::rbHits, ids::rbStorms, ids::rbThrows, ids::rbFast, ids::grains, ids::grainMode, ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::heat, ids::heatIn, ids::heatOut, ids::autoWeather, ids::balloonSfx, ids::popsThru, ids::grainsLevel, ids::catchFrom })
+    for (auto* no : { ids::ambiOrder, ids::rbBoom, ids::rbHits, ids::rbStorms, ids::rbThrows, ids::rbFast, ids::grains, ids::grainMode, ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::heat, ids::heatIn, ids::heatOut, ids::autoWeather, ids::balloonSfx, ids::popsThru, ids::grainsLevel, ids::catchFrom })
         if (id == no) return false;
     return ! id.endsWith ("Owned");
 }
@@ -1305,6 +1331,27 @@ void FreakiePieProcessor::timerCallback()
     lastTimerMs = now;
     keepSnowAndHeatApart();
     autoWeatherStep (dt);
+    // a higher order chosen: make its master stages ready (with the sound paused for that moment)
+    const int want = (fp::ambi::chFor (1 + (int) std::lround (p_ambiOrder->load())) + 1) / 2;
+    if (preparedRate > 0.0 && want > preparedPairs.load())
+    {
+        suspendProcessing (true);
+        preparePairs (want);
+        suspendProcessing (false);
+    }
+}
+
+void FreakiePieProcessor::preparePairs (int upTo)
+{
+    upTo = jlimit (1, kPairs, upTo);
+    for (int k = preparedPairs.load(); k < upTo; ++k)
+    {
+        weather[(size_t) k].prepare (preparedRate);
+        masterEq[(size_t) k].prepare (preparedRate);
+        snowFreeze[(size_t) k]->prepare (preparedRate);
+        heatWave[(size_t) k]->prepare (preparedRate);
+    }
+    preparedPairs.store (jmax (preparedPairs.load(), upTo));
 }
 
 // The snow and the heatwave never fall together: whichever came on last stays, and the other

@@ -2,7 +2,7 @@
 
 # Mellyloon: the spatial audio version of Pinkie Pie's Balloon Shop
 
-> **Spatial audio.** Mellyloon is the third-order Ambisonics version of [Pinkie Pie's Balloon Shop](../README.md), kept in the Balloon Shop's repository (this folder). It is an **encoder**: stereo goes in, 16 channels of Ambisonics come out (ACN order, SN3D, the format of the IEM and SPARTA plug-ins), and it decodes nothing itself. Route all 16 channels to a decoder, such as the IEM AllRADecoder for loudspeakers or the BinauralDecoder for headphones. For the ordinary stereo plug-in, see the [Balloon Shop](../README.md).
+> **Spatial audio.** Mellyloon is the Ambisonics version (1st to 7th order, 3rd by default) of [Pinkie Pie's Balloon Shop](../README.md), kept in the Balloon Shop's repository (this folder). It is an **encoder**: stereo goes in, Ambisonics come out (ACN order, SN3D, the format of the IEM and SPARTA plug-ins: 16 channels at 3rd order, 36 at 5th, 64 at 7th), and it decodes nothing itself. Route all of them to a decoder of the same order, such as the IEM AllRADecoder for loudspeakers or the BinauralDecoder for headphones. For the ordinary stereo plug-in, see the [Balloon Shop](../README.md).
 
 The same multi-effect you play as balloons, inside a glass sphere you can turn round, with its sound placed in 3-D.
 
@@ -12,7 +12,8 @@ The same multi-effect you play as balloons, inside a glass sphere you can turn r
 - **Distance, after the IEM RoomEncoder.** Every sound is a point with its own propagation delay (so moving sounds Doppler-shift; a switch turns that off and keeps their pitch), 1/r level, a little air absorption and first-order reflections from the walls of a room round the sphere.
 - **Weather in the sphere.** Clouds, rain, snow and heat drift through the glass as patches. A grain they pass over has its settings shaken up at random; snow freezes it and the heat smears it.
 - **Sonic rainboom.** Something dives in from outside the glass and breaks the sound barrier, at a place it picks, where you fling a balloon, or where a grain is flying fast enough. A double-crack boom comes from that point. Then seven rings, one per colour of your sound (red the lows, violet the highs), open out round it, pass over you and leave through the glass.
-- **One reverb** for the whole sphere, built like the IEM FdnReverb: 64 lines with IEM's prime delay recipe, Hadamard mixing and frequency-dependent decay, run on all 16 channels.
+- **Any order from 1st to 7th.** The order token picks it: 16 channels at 3rd order (the default), 36 at 5th, 64 at 7th. At 7th order 16 grains take about 31 % of one core, against 23 % at 3rd.
+- **One reverb** for the whole sphere, built like the IEM FdnReverb: 64 lines with IEM's prime delay recipe, Hadamard mixing and frequency-dependent decay, run on every channel.
 - **An energy map** after the IEM EnergyVisualizer, on the glass and flat at the top left.
 
 Everything else is the Balloon Shop: the order ring, the pumps, the store, the chalkboard, the weather bar, the card, the library and Trixie.
@@ -29,10 +30,10 @@ Everything else is the Balloon Shop: the order ring, the pumps, the store, the c
 
 ## In REAPER with the IEM plug-ins
 
-1. Put Mellyloon on a track and set the track to 16 channels (the track's **Route** button, *Track channels: 16*).
-2. After it, add a decoder for your speakers or headphones, for example IEM **AllRADecoder** or **BinauralDecoder** (order 3, normalisation SN3D), and the IEM **EnergyVisualizer** if you like.
+1. Put Mellyloon on a track and give the track as many channels as the order you want (the track's **Route** button, *Track channels*): 16 for 3rd order (the default), 36 for 5th, 64 for 7th. The **order** token in the plug-in (bottom right) picks the order, from 1st to 7th.
+2. After it, add a decoder for your speakers or headphones at the same order, for example IEM **AllRADecoder** or **BinauralDecoder** (normalisation SN3D), and the IEM **EnergyVisualizer** if you like.
 
-On a track with fewer than 16 channels only the first channels come out, and the plug-in's map says so.
+On a track with too few channels for the order you picked, the highest order that fits comes out, and the plug-in's map says so.
 
 ## Download
 
@@ -65,7 +66,7 @@ With `-DMELLYLOON_BUILD_TESTS=ON` you also get three test programs: `MellyloonSp
 
 - Spatial mode: each copy of the effects gives out only its effects' sound (its output minus the dry part it passed, sample by sample), and that is a single point at its grain, so every copy is a point you can find. The dry sound is encoded once, at the source. With several copies each is turned down by 1 / sqrt(N).
 - Inside the sphere the higher orders fade as a sound nears the middle, so it spreads round you, and it gets up to 6 dB louder there. As things move, their 16 gains glide across each block; each granulator grain keeps its direction for its whole life, as in IEM's.
-- The master weather filters, snow, heatwave, EQ, leveler and limiter run on all 16 channels, the leveler and limiter linked. Snow and the heatwave resynthesise each channel separately, which makes a frozen scene diffuse.
+- The master weather filters, snow, heatwave, EQ, leveler and limiter run on every channel, the leveler and limiter linked. Snow and the heatwave resynthesise each channel separately, which makes a frozen scene diffuse.
 - On an Apple M2 Max, 16 grains in spatial mode take about 20 to 24 % of one core at 48 kHz (measured by the sphere test).
 
 ## Human contributions

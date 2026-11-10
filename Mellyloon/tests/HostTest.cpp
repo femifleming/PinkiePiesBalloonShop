@@ -2053,7 +2053,7 @@ int main (int argc, char** argv)
             const bool back = *p.apvts.getRawParameterValue (ids::balloonSfx) > 0.5f;
             std::printf ("tokens: %d; pop sounds at the top of the help and reset list in their style %d, click flips it %d and back %d; help and reset in the top right corner %d\n",
                          FreakieTestAccess::numPills (e), placed, flipped, back, corner);
-            if (FreakieTestAccess::numPills (e) != 7 || ! placed || ! flipped || ! back || ! corner) FAIL_HERE();
+            if (FreakieTestAccess::numPills (e) != 8 || ! placed || ! flipped || ! back || ! corner) FAIL_HERE();
         }
         shoot ("_tokens1.png");
         {

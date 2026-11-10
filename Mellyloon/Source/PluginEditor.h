@@ -670,7 +670,7 @@ private:
         bool cloudable = false, drifting = false;
         float driftTarget = 0.0f, driftClock = 0.0f, cloudVis = 0.0f;
     };
-    enum TokenIcon { iconPops = 0, iconTone, iconCatch, iconFlight, iconSpeed, iconSpread, iconDeviate, iconWidth, iconOutput, iconDoppler };
+    enum TokenIcon { iconPops = 0, iconTone, iconCatch, iconFlight, iconSpeed, iconSpread, iconDeviate, iconWidth, iconOutput, iconDoppler, iconOrder };
 
     void pillStep (float dt);   // the tokens bob gently where they are (and wander when it's cloudy)
     void stopPillDrift (Pill&);

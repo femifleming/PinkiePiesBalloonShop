@@ -41,6 +41,7 @@ public:
         float deviation = 0.3f;        // how much each grain's length, start and pitch wander
         bool freeze = false;
         float radiusM = 12.0f;         // how many metres the sphere's radius is (for the distance cues)
+        int order = ambi::kOrder;      // the Ambisonic order to encode to
         int numPlaces = 1;
         std::array<Vec3, kMaxPlaces> places {};
     };
@@ -128,7 +129,7 @@ public:
             g.lp = flushDenormal (g.lp);
             if (g.age >= g.len) g.active = false;
             if (end <= from) continue;
-            for (int c = 0; c < ambi::kCh; ++c)
+            for (int c = 0; c < ambi::chFor (s.order); ++c)
             {
                 const float k = g.coef[(size_t) c] * norm * level;
                 if (k == 0.0f) continue;
@@ -220,7 +221,7 @@ private:
         // lowpass, and it arrives d / 343 s later
         const float dm = std::max (0.3f, dist * s.radiusM);
         const float gainD = std::min (4.0f, std::max (0.5f, 0.5f * s.radiusM) / dm);
-        g->coef = ambi::encodeNear (dir * std::max (dist, 1.0e-3f));
+        g->coef = ambi::encodeNear (dir * std::max (dist, 1.0e-3f), s.order);
         for (auto& k : g->coef) k *= gainD;
         const float air = std::min (20000.0f / (1.0f + dm / 25.0f), (float) sr * 0.45f);
         g->a = 1.0f - std::exp (-(float) kTwoPi * air / (float) sr);

@@ -901,9 +901,11 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
     addPill (ids::deviate,     "deviate", { 904.0f, 236.0f }, balloonOrange, iconDeviate);
     addPill (ids::grainMode,   "grains",  { 846.0f, 312.0f }, balloonMint,   iconDeviate);
     addPill (ids::doppler,     "doppler", { 904.0f, 312.0f }, balloonPink,   iconDoppler);
+    addPill (ids::ambiOrder,   "order",   { 875.0f, 388.0f }, balloonTeal,   iconOrder);
     for (int i = 0; i < pills.size(); ++i) pills[i]->phase = 0.9f * (float) i;
     for (auto* pl : pills)   // the clouds move these (not the switches, not where the sound comes from)
-        pl->cloudable = pl->param->getParameterID() != ids::doppler && pl->param->getParameterID() != ids::catchFrom;
+        pl->cloudable = pl->param->getParameterID() != ids::doppler && pl->param->getParameterID() != ids::catchFrom
+                        && pl->param->getParameterID() != ids::ambiOrder;   // (the order is the track's business, not the weather's)
     if (auto* gp = p.apvts.getParameter (ids::grains))
     {
         grainsAtt = std::make_unique<ParameterAttachment> (*gp, [this] (float v) { grainsValue = v; });
@@ -1218,6 +1220,21 @@ void FreakiePieEditor::drawToken (Graphics& g, const Pill& pl) const
             const auto dot = m == 0 ? c : path.getPointAlongPath (frac2 (u * 0.25f) * path.getLength());
             g.setColour (ink);
             g.fillEllipse (Rectangle<float> (5.0f, 5.0f).withCentre (dot));
+            break;
+        }
+        case iconOrder:    // the order as a big number, ringed by its top order's harmonics (2N + 1 dots)
+        {
+            const int o = 1 + roundToInt (pl.value);
+            g.setColour (ink.withAlpha (0.55f));
+            const int dots = 2 * o + 1;
+            for (int i = 0; i < dots; ++i)
+            {
+                const float a = (float) i / (float) dots * MathConstants<float>::twoPi + t * 0.3f;
+                g.fillEllipse (Rectangle<float> (2.6f, 2.6f).withCentre (c + Point<float> (std::cos (a), std::sin (a)) * (R * 0.68f)));
+            }
+            g.setColour (ink);
+            g.setFont (SadLookAndFeel::uiFont (R * 0.95f, true));
+            g.drawText (String (o), Rectangle<float> (2.0f * R, 2.0f * R).withCentre (c), Justification::centred);
             break;
         }
         case iconDoppler:  // a dot flying past, its sound waves bunched up ahead and stretched behind (flat rings when off)
@@ -2311,9 +2328,10 @@ namespace
           "When it's cloudy the tokens on the right wander too, like a balloon inside a cloud: a little cloud sits on each one while it does. Touch one and it stops.\n\n"
           "You can drag a grain while it flies. Let go and it carries on from there." },
         { "Out",
-          "Out comes third-order Ambisonics on 16 channels, ACN order with SN3D normalisation, the format the IEM and SPARTA plug-ins use. "
-          "In REAPER, give the track 16 channels and put a decoder after it, such as the IEM AllRADecoder for loudspeakers or the BinauralDecoder for headphones. "
-          "On a track with fewer channels only the first ones come out, and the map says so.\n\n"
+          "Out comes Ambisonics in ACN order with SN3D normalisation, the format the IEM and SPARTA plug-ins use. The order token (bottom right) sets how sharp it is, "
+          "from 1st to 7th order: 3rd order (the default) is 16 channels, 5th is 36 and 7th is 64. A higher order pins every sound down more sharply, mostly heard on a big dome of loudspeakers. "
+          "In REAPER, give the track that many channels and put a decoder after it at the same order, such as the IEM AllRADecoder for loudspeakers or the BinauralDecoder for headphones. "
+          "On a track with too few channels for the order you picked, the highest order that fits comes out, and the map says so.\n\n"
           "There is one reverb for the whole sphere (the lilac balloons), built like the IEM FdnReverb: 64 delay lines run on the 16 channels, "
           "with the highs dying away faster than the lows. The grains further out send more into it." },
         { "Colours",
@@ -6268,10 +6286,12 @@ void FreakiePieEditor::drawEnergyMap (Graphics& g) const
     g.setFont (SadLookAndFeel::uiFont (8.5f, false));
     g.setColour (palette::blush.withAlpha (0.6f));
     g.drawText ("left   ahead   right", frame.withHeight (16.0f).reduced (10.0f, 0.0f).translated (0.0f, 2.0f), Justification::centredRight);
-    String out = "out: 3rd-order Ambisonics, 16 ch (ACN, SN3D)";
+    const int ord = proc.orderNow.load();
+    static const char* nth[] = { "0th", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th" };
+    String out = String ("out: ") + nth[jlimit (0, 7, ord)] + "-order Ambisonics, " + String (fp::ambi::chFor (ord)) + " ch (ACN, SN3D)";
     if (proc.ambiFallback.load())
     {
-        out = "the track has " + String (proc.outChannels.load()) + " ch: give it 16";
+        out = "the track has " + String (proc.outChannels.load()) + " ch: give it " + String (fp::ambi::chFor (ord));
         g.setColour (Colour (0xffffb0c8));
     }
     g.drawText (out, frame.withTop (frame.getBottom() - 14.0f).reduced (10.0f, 0.0f), Justification::centredLeft);

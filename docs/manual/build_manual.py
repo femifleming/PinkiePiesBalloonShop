@@ -25,9 +25,9 @@ SHOP = dict(
     accent="#ff4f9a", accent2="#ffc4e1",
 )
 MELLY = dict(
-    key="melly", name="Mellyloon", short="Mellyloon", version="0.1.1",
+    key="melly", name="Mellyloon", short="Mellyloon", version="0.2.0",
     icon=os.path.join(REPO, "Mellyloon/Resources/icon/icon_1024.png"),
-    tagline="The Balloon Shop inside a glass sphere: a third-order Ambisonics encoder.",
+    tagline="The Balloon Shop inside a glass sphere: an Ambisonics encoder, 1st to 7th order.",
     accent="#8a6bff", accent2="#d9ccff",
 )
 
@@ -195,7 +195,7 @@ MAPS = {
         ((545, 290), "The sphere: drag the empty glass to turn it, scroll or pinch to zoom, double-click to reset the view."),
         ((140, 200), "The energy map: where the sound is loudest, from the front."),
         ((190, 360), "The jar of grains: click for another, drag one into the sphere."),
-        ((875, 235), "The tokens: flight, speed, distance, deviate, grain mode and Doppler."),
+        ((875, 235), "The tokens: flight, speed, distance, deviate, grain mode, Doppler and the Ambisonic order."),
         ((40, 20), "Move the cursor here and the card comes down: presets, the scale and the bypass. At the left edge, the order list slides out."),
     ]),
 }
@@ -281,10 +281,10 @@ def flow_section(cfg):
             ("The granulator", "A cloud of short grains, each born at its own direction round one of the grains."),
             ("Pops and frozen balloons", "From the loudspeaker's place."),
             ("Sonic rainboom", "The dive and the boom as points, the rainbow as seven rings round where it broke."),
-            ("Sphere reverb", "One 64-line FDN for the whole sphere, run on all 16 channels. Grains further out send more into it."),
-            ("Energy map", "Measured here, for the glass and the map at the top left."),
-            ("Master", "Weather, heat, snow and the chalkboard EQ on all 16 channels, then the leveler and the limiter (-1 dBFS), linked across the channels."),
-            ("Out", "16 channels of third-order Ambisonics (ACN, SN3D), to a decoder."),
+            ("Sphere reverb", "One 64-line FDN for the whole sphere, run on every channel. Grains further out send more into it."),
+            ("Energy map", "Measured here (from the first 16 channels, whatever the order), for the glass and the map at the top left."),
+            ("Master", "Weather, heat, snow and the chalkboard EQ on every channel, then the leveler and the limiter (-1 dBFS), linked across the channels."),
+            ("Out", "Ambisonics at the order you picked (ACN, SN3D: 16 channels at 3rd order, up to 64 at 7th), to a decoder."),
         ]
     boxes = "".join("<div class='step'><b>%s</b><span>%s</span></div>" % (esc(a), esc(b)) for a, b in steps)
     return "<h2 id='flow'>How the sound flows</h2><div class='flow'>%s</div>" % boxes
@@ -335,9 +335,9 @@ def trouble_section(cfg):
     ]
     if cfg["key"] == "melly":
         items.insert(0, ("I only hear one or two channels, or the map says the track has 2 channels",
-                         "The track needs 16 channels. In REAPER, the track's Route button, Track channels: 16. Then put a decoder after Mellyloon."))
+                         "The track needs as many channels as the order: 16 for 3rd order, 36 for 5th, 64 for 7th. In REAPER, the track's Route button, Track channels. Then put a decoder after Mellyloon."))
         items.insert(1, ("It sounds wrong through my decoder",
-                         "Set the decoder to order 3, ACN channel order, SN3D normalisation (AmbiX). IEM's decoders use this by default; in SPARTA pick ACN and SN3D."))
+                         "Set the decoder to the same order as Mellyloon's order token, ACN channel order, SN3D normalisation (AmbiX). IEM's decoders use ACN and SN3D by default; in SPARTA pick ACN and SN3D."))
     body = "".join("<h3>%s</h3><p>%s</p>" % (esc(a), b) for a, b in items)
     return "<h2 id='trouble'>Problems and answers</h2>" + body
 
@@ -369,22 +369,26 @@ def melly_extra_sections():
     rows = "".join("<tr><td><b>%s</b></td><td>%s</td></tr>" % (a, esc(b)) for a, b in flights)
     return f"""
 <h2 id="ambisonics">Spatial audio: what comes out, and where it goes</h2>
-<p>Mellyloon is an encoder. It never plays straight to loudspeakers or headphones: it puts out a sound field on 16 channels, and a decoder after it turns that into speaker feeds or binaural headphones. That's what lets the same session play on any speaker layout.</p>
+<p>Mellyloon is an encoder. It never plays straight to loudspeakers or headphones: it puts out a sound field, and a decoder after it turns that into speaker feeds or binaural headphones. That's what lets the same session play on any speaker layout.</p>
 <table class="plain">
-<tr><td>Format</td><td>Third-order Ambisonics, 16 channels</td></tr>
+<tr><td>Order</td><td>1st to 7th, set with the order token (3rd by default)</td></tr>
+<tr><td>Channels</td><td>(order + 1)<sup>2</sup>: 4, 9, 16, 25, 36, 49 or 64</td></tr>
 <tr><td>Channel order</td><td>ACN (0 to 15)</td></tr>
 <tr><td>Normalisation</td><td>SN3D, without the Condon-Shortley phase (AmbiX)</td></tr>
 <tr><td>Axes</td><td>x ahead, y to the left, z up (as in the IEM plug-ins)</td></tr>
 <tr><td>Input</td><td>Stereo</td></tr>
-<tr><td>VST3 layout</td><td>Third-order Ambisonics (ACN), so hosts that know Ambisonics tracks offer it there</td></tr>
+<tr><td>VST3 layout</td><td>Ambisonics (ACN) up to 7th order, so hosts that know Ambisonics tracks offer it there; the Audio Unit publishes 3rd order, and takes the others if the host asks</td></tr>
 </table>
 <h3>In REAPER with the IEM plug-ins</h3>
 <ol>
-<li>Put Mellyloon on a track and set the track to 16 channels: the track's <b>Route</b> button, <i>Track channels: 16</i>.</li>
-<li>After it, add a decoder: the IEM <b>AllRADecoder</b> for a loudspeaker layout, or the <b>BinauralDecoder</b> for headphones (order 3, SN3D). Add the IEM <b>EnergyVisualizer</b> too if you like.</li>
-<li>To send several Mellyloon tracks to one decoder, make each a 16-channel track feeding a 16-channel bus, and decode once on the bus.</li>
+<li>Pick the order with the order token (bottom right; 3rd by default).</li>
+<li>Give the track as many channels as that order needs, with the track's <b>Route</b> button, <i>Track channels</i>: 16 for 3rd order, 36 for 5th, 64 for 7th.</li>
+<li>After it, add a decoder at the same order: the IEM <b>AllRADecoder</b> for a loudspeaker layout, or the <b>BinauralDecoder</b> for headphones (SN3D). Add the IEM <b>EnergyVisualizer</b> too if you like.</li>
+<li>To send several Mellyloon tracks to one decoder, give them all the same order, feed a bus with the same number of channels, and decode once on the bus.</li>
 </ol>
-<p>Any host that can run a plug-in on 16 channels works the same way. SPARTA's decoders work too: choose ACN and SN3D. On a track with fewer than 16 channels only the first ones come out, and the map says so.</p>
+<p>Any host that can run a plug-in on that many channels works the same way. SPARTA's decoders work too: choose ACN and SN3D. On a track with too few channels for the order you picked, the highest order that fits comes out, and the map says so.</p>
+<h3>Which order?</h3>
+<p>A higher order pins every sound down more sharply. Through a decoder of the same order, a single point puts about 36 % of its energy within 20 degrees of where it is at 3rd order, 62 % at 5th and 83 % at 7th. You hear that most on a big dome of loudspeakers; through headphones the difference is small. It costs a little more: 16 grains with the reverb and the weather take about 23 % of one core at 3rd order, 26 % at 5th and 31 % at 7th (an Apple M2 Max at 48 kHz). The first time you pick 4th order or above, the sound pauses for a moment while the snow and the heatwave get ready for the extra channels.</p>
 <p>The one exception to "encoder only" is your own listening while you work: that's the decoder's job, so there's no headphone mode in Mellyloon itself.</p>
 
 <h2 id="flight">The flight modes</h2>
@@ -494,8 +498,8 @@ def build(cfg, dump, shots_dir, out_pdf):
         about = """<p>The Balloon Shop is a multi-effect you play as balloons. Every balloon is a control, and how full it is shows its value. Your sound goes through a chain of effects in an order you set, the weather changes it, pumps blow up plucked notes or catch sounds into frozen balloons, and a little cloud sets off a sonic rainboom.</p>
 <p>This manual covers version 1.1.1. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, a map of the window and how the sound flows. After it there's a quick reference for gestures, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>"""
     else:
-        about = """<p>Mellyloon is the Balloon Shop inside a glass sphere: a third-order Ambisonics encoder. Stereo comes in; 16 channels of a sound field come out, for a decoder to play on loudspeakers or headphones. Little bouquets of balloons fly round inside the sphere, each carrying its own copy of the effects, and every sound is a single point you can hear and find, with its distance, its Doppler shift and one reverb for the whole sphere.</p>
-<p>This manual covers version 0.1.1. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, how to route it to a decoder, a map of the window and how the sound flows. After it there are the flight modes, distance and Doppler, a gesture reference, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>
+        about = """<p>Mellyloon is the Balloon Shop inside a glass sphere: an Ambisonics encoder, from 1st to 7th order (3rd by default). Stereo comes in; a sound field comes out (16 channels at 3rd order, 36 at 5th, 64 at 7th), for a decoder to play on loudspeakers or headphones. Little bouquets of balloons fly round inside the sphere, each carrying its own copy of the effects, and every sound is a single point you can hear and find, with its distance, its Doppler shift and one reverb for the whole sphere.</p>
+<p>This manual covers version 0.2.0. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, how to route it to a decoder, a map of the window and how the sound flows. After it there are the flight modes, distance and Doppler, a gesture reference, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>
 <p>Everything in the Balloon Shop is here too, so the shop's own manual also applies.</p>"""
     parts.append("<h2 id='about'>About this manual</h2>" + about)
     parts.append(install_section(cfg))

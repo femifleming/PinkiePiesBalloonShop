@@ -83,7 +83,7 @@ You can drag a grain while it flies. Let go and it carries on from there.
 
 ## Out
 
-Out comes third-order Ambisonics on 16 channels, ACN order with SN3D normalisation, the format the IEM and SPARTA plug-ins use. In REAPER, give the track 16 channels and put a decoder after it, such as the IEM AllRADecoder for loudspeakers or the BinauralDecoder for headphones. On a track with fewer channels only the first ones come out, and the map says so.
+Out comes Ambisonics in ACN order with SN3D normalisation, the format the IEM and SPARTA plug-ins use. The order token (bottom right) sets how sharp it is, from 1st to 7th order: 3rd order (the default) is 16 channels, 5th is 36 and 7th is 64. A higher order pins every sound down more sharply, mostly heard on a big dome of loudspeakers. In REAPER, give the track that many channels and put a decoder after it at the same order, such as the IEM AllRADecoder for loudspeakers or the BinauralDecoder for headphones. On a track with too few channels for the order you picked, the highest order that fits comes out, and the map says so.
 
 There is one reverb for the whole sphere (the lilac balloons), built like the IEM FdnReverb: 64 delay lines run on the 16 channels, with the highs dying away faster than the lows. The grains further out send more into it.
 
