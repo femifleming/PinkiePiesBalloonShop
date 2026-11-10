@@ -10,7 +10,7 @@
 #include "../Source/PluginEditor.h"
 
 using namespace juce;
-extern int mellyloonDbgFrames;
+extern int palaceDbgFrames;
 
 // every failed check says where it is
 #define FAIL_HERE() do { ++fails; std::printf ("  ^ FAILED (HostTest.cpp line %d)\n", __LINE__); } while (0)
@@ -349,27 +349,27 @@ int main (int argc, char** argv)
     int fails = 0;
     FreakiePieProcessor::rememberLastState = false;   // start every test instance from the defaults
 
-    // MELLY_LIVE=1: the real window on screen, sound running, frames counted in several states
-    if (std::getenv ("MELLY_LIVE") != nullptr)
+    // PALACE_LIVE=1: the real window on screen, sound running, frames counted in several states
+    if (std::getenv ("PALACE_LIVE") != nullptr)
     {
         FreakiePieProcessor p;
         p.setPlayConfigDetails (2, 16, 48000, 512);
         p.prepareToPlay (48000, 512);
         auto set = [&] (const char* id, float v) { if (auto* prm = p.apvts.getParameter (id)) prm->setValueNotifyingHost (prm->convertTo0to1 (v)); };
-        DocumentWindow win ("Mellyloon fps", Colours::black, 0);
+        DocumentWindow win ("Balloon Palace fps", Colours::black, 0);
         win.setUsingNativeTitleBar (true);
         auto* ed = p.createEditorAndMakeActive();
         win.setContentOwned (ed, true);
-        // MELLY_LIVE_SCALE: the window's size against the design (a host opens it at 0.9)
-        const float sc = std::getenv ("MELLY_LIVE_SCALE") != nullptr ? (float) std::atof (std::getenv ("MELLY_LIVE_SCALE")) : 1.0f;
+        // PALACE_LIVE_SCALE: the window's size against the design (a host opens it at 0.9)
+        const float sc = std::getenv ("PALACE_LIVE_SCALE") != nullptr ? (float) std::atof (std::getenv ("PALACE_LIVE_SCALE")) : 1.0f;
         ed->setSize ((int) (FreakiePieEditor::designW * sc), (int) (FreakiePieEditor::designH * sc));
         std::printf ("window %d x %d\n", ed->getWidth(), ed->getHeight());
         win.centreWithSize (win.getWidth(), win.getHeight());
         win.setVisible (true);
         win.toFront (true);
-        if (auto* peer = win.getPeer(); peer != nullptr && std::getenv ("MELLY_RENDER") != nullptr)
+        if (auto* peer = win.getPeer(); peer != nullptr && std::getenv ("PALACE_RENDER") != nullptr)
         {
-            peer->setCurrentRenderingEngine (std::atoi (std::getenv ("MELLY_RENDER")));
+            peer->setCurrentRenderingEngine (std::atoi (std::getenv ("PALACE_RENDER")));
             std::printf ("renderer: %s\n", peer->getAvailableRenderingEngines()[peer->getCurrentRenderingEngine()].toRawUTF8());
         }
         AudioBuffer<float> buf (16, 512); MidiBuffer m;
@@ -379,7 +379,7 @@ int main (int argc, char** argv)
         auto run = [&] (const char* what)
         {
             MessageManager::getInstance()->runDispatchLoopUntil (800);
-            const int f0 = mellyloonDbgFrames;
+            const int f0 = palaceDbgFrames;
             const double t0 = Time::getMillisecondCounterHiRes();
             auto cpuNow = [] { rusage u {}; getrusage (RUSAGE_SELF, &u); return (double) u.ru_utime.tv_sec + 1e-6 * (double) u.ru_utime.tv_usec + (double) u.ru_stime.tv_sec + 1e-6 * (double) u.ru_stime.tv_usec; };
             const double c0 = cpuNow();
@@ -390,8 +390,8 @@ int main (int argc, char** argv)
                 ++blk; p.processBlock (buf, m);
                 MessageManager::getInstance()->runDispatchLoopUntil (10);
             }
-            const double fps = (mellyloonDbgFrames - f0) / ((Time::getMillisecondCounterHiRes() - t0) * 0.001);
-            std::printf ("live fps (%s): %.1f   (%.1f ms of CPU a frame, sound included)\n", what, fps, 1000.0 * (cpuNow() - c0) / jmax (1, mellyloonDbgFrames - f0));
+            const double fps = (palaceDbgFrames - f0) / ((Time::getMillisecondCounterHiRes() - t0) * 0.001);
+            std::printf ("live fps (%s): %.1f   (%.1f ms of CPU a frame, sound included)\n", what, fps, 1000.0 * (cpuNow() - c0) / jmax (1, palaceDbgFrames - f0));
             worst = jmin (worst, fps);
         };
         run ("default: 4 grains orbiting");

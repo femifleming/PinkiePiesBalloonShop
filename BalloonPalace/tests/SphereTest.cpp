@@ -811,17 +811,17 @@ int main (int argc, char** argv)
             writeWav (outDir.getChildFile (file), r.out);
             check (r.finite, (juce::String ("wrote ") + file).toRawUTF8());
         };
-        scene ("mellyloon_spatial_lorenz.wav", [] (FreakiePieProcessor& p)
+        scene ("balloonpalace_spatial_lorenz.wav", [] (FreakiePieProcessor& p)
         {
             setParam (p, ids::grains, 4.0f); setParam (p, ids::flight, 2.0f); setParam (p, ids::deviate, 0.7f);
             setParam (p, ids::stOwned, 1.0f); setParam (p, ids::stAmount, 0.5f); setParam (p, ids::grMix, 0.5f);
         });
-        scene ("mellyloon_scatter_flock.wav", [] (FreakiePieProcessor& p)
+        scene ("balloonpalace_scatter_flock.wav", [] (FreakiePieProcessor& p)
         {
             setParam (p, ids::grainMode, 1.0f); setParam (p, ids::grains, 12.0f); setParam (p, ids::flight, 3.0f);
             setParam (p, ids::grMix, 0.8f); setParam (p, ids::grSize, 180.0f); setParam (p, ids::grPan, 0.15f);
         });
-        scene ("mellyloon_copies_orbit.wav", [] (FreakiePieProcessor& p)
+        scene ("balloonpalace_copies_orbit.wav", [] (FreakiePieProcessor& p)
         {
             setParam (p, ids::grainMode, 2.0f); setParam (p, ids::grains, 4.0f); setParam (p, ids::flight, 1.0f); setParam (p, ids::deviate, 0.6f);
         });

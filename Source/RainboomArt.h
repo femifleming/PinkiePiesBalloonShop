@@ -3,7 +3,7 @@
 #include <functional>
 #include <vector>
 
-// The sonic rainboom's pictures, cartoon style (shared by the Balloon Shop and Mellyloon; Mellyloon
+// The sonic rainboom's pictures, cartoon style (shared by the Balloon Shop and the Balloon Palace; the Balloon Palace
 // projects its 3-D points to the screen first, then draws with the same brushes):
 //   ribbon   the rainbow trail: a smooth, tapered ribbon of seven bands that flutters a little,
 //            with a soft white glow and a white shine along it; it fades from its tail end

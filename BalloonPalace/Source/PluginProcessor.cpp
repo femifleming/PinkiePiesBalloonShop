@@ -274,9 +274,15 @@ FreakiePieProcessor::FreakiePieProcessor()
 
     // start where you left off
     if (rememberLastState)
-        if (auto xml = parseXML (lastStateFile()))
+    {
+        // (it was called Mellyloon before: its last patch is picked up once, if there isn't one under the new name yet)
+        auto last = lastStateFile();
+        if (! last.existsAsFile() && lastStateOverride == File())
+            last = last.getSiblingFile ("Mellyloon last patch.xml");
+        if (auto xml = parseXML (last))
             if (xml->hasTagName (apvts.state.getType()))
                 loadStateXml (*xml);
+    }
     startTimer (1000);   // auto weather ticks once a second
 }
 
@@ -294,7 +300,7 @@ File FreakiePieProcessor::lastStateFile()
    #else
     const auto folder = File::getSpecialLocation (File::userApplicationDataDirectory);   // AppData\Roaming on Windows, ~/.config on Linux
    #endif
-    return folder.getChildFile ("FreakiePie").getChildFile ("Mellyloon last patch.xml");   // (its own, apart from the shop's)
+    return folder.getChildFile ("FreakiePie").getChildFile ("Balloon Palace last patch.xml");   // (its own, apart from the shop's)
 }
 
 void FreakiePieProcessor::saveLastState()

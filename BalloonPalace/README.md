@@ -1,8 +1,8 @@
-<p align="center"><img src="docs/icon.png" width="160" alt="Mellyloon icon"></p>
+<p align="center"><img src="docs/icon.png" width="160" alt="Pinkie Pie's Balloon Palace icon"></p>
 
-# Mellyloon: the spatial audio version of Pinkie Pie's Balloon Shop
+# Pinkie Pie's Balloon Palace: the spatial audio version of Pinkie Pie's Balloon Shop
 
-> **Spatial audio.** Mellyloon is the Ambisonics version (1st to 7th order, 3rd by default) of [Pinkie Pie's Balloon Shop](../README.md), kept in the Balloon Shop's repository (this folder). It is an **encoder**: stereo goes in, Ambisonics come out (ACN order, SN3D, the format of the IEM and SPARTA plug-ins: 16 channels at 3rd order, 36 at 5th, 64 at 7th), and it decodes nothing itself. Route all of them to a decoder of the same order, such as the IEM AllRADecoder for loudspeakers or the BinauralDecoder for headphones. For the ordinary stereo plug-in, see the [Balloon Shop](../README.md).
+> **Spatial audio.** Pinkie Pie's Balloon Palace is the Ambisonics version (1st to 7th order, 3rd by default) of [Pinkie Pie's Balloon Shop](../README.md), kept in the Balloon Shop's repository (this folder). It is an **encoder**: stereo goes in, Ambisonics come out (ACN order, SN3D, the format of the IEM and SPARTA plug-ins: 16 channels at 3rd order, 36 at 5th, 64 at 7th), and it decodes nothing itself. Route all of them to a decoder of the same order, such as the IEM AllRADecoder for loudspeakers or the BinauralDecoder for headphones. For the ordinary stereo plug-in, see the [Balloon Shop](../README.md).
 
 The same multi-effect you play as balloons, inside a glass sphere you can turn round, with its sound placed in 3-D.
 
@@ -22,30 +22,30 @@ Everything else is the Balloon Shop: the order ring, the pumps, the store, the c
 - Windows: VST3 and a standalone app
 - Linux: VST3, LV2 and a standalone app
 
-![Mellyloon](docs/screenshot.jpg)
+![Pinkie Pie's Balloon Palace](docs/screenshot.jpg)
 
 **[How to use it: the full help page](docs/HELP.md)** (the same guide is in the plug-in's library: click **help** in the top right corner).
 
-**[The manual (PDF)](docs/manual/Mellyloon%20Manual.pdf)**: installing, routing to a decoder, a map of the window, how the sound flows, the whole guide with pictures, the flight modes, distance and Doppler, every parameter, the presets and answers to common problems. It's also in every download.
+**[The manual (PDF)](docs/manual/Pinkie%20Pies%20Balloon%20Palace%20Manual.pdf)**: installing, routing to a decoder, a map of the window, how the sound flows, the whole guide with pictures, the flight modes, distance and Doppler, every parameter, the presets and answers to common problems. It's also in every download.
 
 ## In REAPER with the IEM plug-ins
 
-1. Put Mellyloon on a track and give the track as many channels as the order you want (the track's **Route** button, *Track channels*): 16 for 3rd order (the default), 36 for 5th, 64 for 7th. The **order** token in the plug-in (bottom right) picks the order, from 1st to 7th.
+1. Put the Balloon Palace on a track and give the track as many channels as the order you want (the track's **Route** button, *Track channels*): 16 for 3rd order (the default), 36 for 5th, 64 for 7th. The **order** token in the plug-in (bottom right) picks the order, from 1st to 7th.
 2. After it, add a decoder for your speakers or headphones at the same order, for example IEM **AllRADecoder** or **BinauralDecoder** (normalisation SN3D), and the IEM **EnergyVisualizer** if you like.
 
 On a track with too few channels for the order you picked, the highest order that fits comes out, and the plug-in's map says so.
 
 ## Download
 
-Mellyloon's releases are tagged `mellyloon-v...` on the [Balloon Shop's Releases page](https://github.com/femifleming/PinkiePiesBalloonShop/releases), separate from the shop's own:
+The Balloon Palace's releases are tagged `balloonpalace-v...` on the [Balloon Shop's Releases page](https://github.com/femifleming/PinkiePiesBalloonShop/releases), separate from the shop's own:
 
 | System | File |
 | --- | --- |
-| macOS 11 or later (Apple silicon and Intel) | `Mellyloon-macOS.zip` (Audio Unit, VST3, app) |
-| Windows 10 or later (64-bit) | `Mellyloon-Windows.zip` (VST3, app) |
-| Linux (x86-64) | `Mellyloon-Linux.tar.gz` (VST3, LV2, app) |
+| macOS 11 or later (Apple silicon and Intel) | `PinkiePiesBalloonPalace-macOS.zip` (Audio Unit, VST3, app) |
+| Windows 10 or later (64-bit) | `PinkiePiesBalloonPalace-Windows.zip` (VST3, app) |
+| Linux (x86-64) | `PinkiePiesBalloonPalace-Linux.tar.gz` (VST3, LV2, app) |
 
-Install it the way the [Balloon Shop's README](../README.md#install) describes, with `Mellyloon` in place of `Pinkie Pies Balloon Shop` (on macOS: the `.component` to `~/Library/Audio/Plug-Ins/Components`, the `.vst3` to `~/Library/Audio/Plug-Ins/VST3`, then `xattr -dr com.apple.quarantine` on both, since the builds aren't notarised). The manual has the steps for every system.
+Install it the way the [Balloon Shop's README](../README.md#install) describes, with `Pinkie Pies Balloon Palace` in place of `Pinkie Pies Balloon Shop` (on macOS: the `.component` to `~/Library/Audio/Plug-Ins/Components`, the `.vst3` to `~/Library/Audio/Plug-Ins/VST3`, then `xattr -dr com.apple.quarantine` on both, since the builds aren't notarised). The manual has the steps for every system.
 
 ## Build it yourself
 
@@ -54,13 +54,13 @@ You need CMake 3.22 or later and a C++20 compiler (Xcode on macOS, Visual Studio
 ```sh
 git clone --recursive https://github.com/femifleming/PinkiePiesBalloonShop.git
 cd PinkiePiesBalloonShop
-cmake -S Mellyloon -B build-mellyloon -DCMAKE_BUILD_TYPE=Release
-cmake --build build-mellyloon --config Release --target Mellyloon_All
+cmake -S BalloonPalace -B build-balloonpalace -DCMAKE_BUILD_TYPE=Release
+cmake --build build-balloonpalace --config Release --target BalloonPalace_All
 ```
 
-It uses the shop's JUCE (the `JUCE` submodule) and the shop's pictures (`Resources`), so it needs the whole repository, not this folder alone. On macOS and Windows the build also copies the plug-ins into your user plug-in folders (turn that off with `-DMELLYLOON_COPY_AFTER_BUILD=OFF`); it appears in your DAW as **Mellyloon** under **FreakiePie**. Linux needs the JUCE dependencies listed in the [Balloon Shop's README](../README.md#build-it-yourself).
+It uses the shop's JUCE (the `JUCE` submodule) and the shop's pictures (`Resources`), so it needs the whole repository, not this folder alone. On macOS and Windows the build also copies the plug-ins into your user plug-in folders (turn that off with `-DBALLOONPALACE_COPY_AFTER_BUILD=OFF`); it appears in your DAW as **The Balloon Palace** under **FreakiePie**. Linux needs the JUCE dependencies listed in the [Balloon Shop's README](../README.md#build-it-yourself).
 
-With `-DMELLYLOON_BUILD_TESTS=ON` you also get three test programs: `MellyloonSphereTest` checks the spatial side (the harmonics against the AmbiX definition, every channel of the output, distance and Doppler, the granulator, the reverb, every flight mode with 16 grains, and the CPU), `MellyloonTest` the effect chain, and `MellyloonHostTest` drives the whole interface headlessly, saving screenshots (`SPHERE_SHOTS=<folder>` saves a set of views of the sphere).
+With `-DBALLOONPALACE_BUILD_TESTS=ON` you also get three test programs: `BalloonPalaceSphereTest` checks the spatial side (the harmonics against the AmbiX definition, every channel of the output, distance and Doppler, the granulator, the reverb, every flight mode with 16 grains, and the CPU), `BalloonPalaceTest` the effect chain, and `BalloonPalaceHostTest` drives the whole interface headlessly, saving screenshots (`SPHERE_SHOTS=<folder>` saves a set of views of the sphere).
 
 ## How it works
 
@@ -71,7 +71,7 @@ With `-DMELLYLOON_BUILD_TESTS=ON` you also get three test programs: `MellyloonSp
 
 ## Human contributions
 
-Mellyloon's code was written with Claude Code (Anthropic), working under the direction of its author, [femifleming](https://github.com/femifleming). This is what the author brought to it:
+The Balloon Palace's code was written with Claude Code (Anthropic), working under the direction of its author, [femifleming](https://github.com/femifleming). This is what the author brought to it:
 
 - **The concept.** A spatial version of the Balloon Shop that feels exactly like it, with the balloons in a sphere you can turn. Stereo goes in, and it encodes 16 channels for a decoder.
 - **The references.**
@@ -84,7 +84,7 @@ Mellyloon's code was written with Claude Code (Anthropic), working under the dir
 - **Distance, not width.** The sound is 360 degrees at all times, so spread became distance, from 1 to 50 m, "a small bubble vs a large bubble", with a Doppler switch.
 - **More motion.** More flight modes, all moved by the clouds as well.
 - **The view.** Balloons fly into the globe when you release them, the sphere zooms, and the background blurs and darkens as you zoom in, at a smooth frame rate.
-- **The name.** "Mellyloon", clearly labelled an encoder and kept in the Balloon Shop repo.
+- **The name.** First "Mellyloon", then "Pinkie Pie's Balloon Palace", clearly labelled an encoder and kept in the Balloon Shop repo.
 - **Listening fixes.** The author found frozen balloons too quiet and asked for the gain staging to be audited.
 
 ## Credits and notes

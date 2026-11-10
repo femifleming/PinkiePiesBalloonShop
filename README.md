@@ -12,9 +12,9 @@ Your sound goes through the effects in the order you set: move the cursor to the
 
 ![Pinkie Pie's Balloon Shop](docs/screenshot.jpg)
 
-> **Spatial audio version: [Mellyloon](Mellyloon/README.md).** The same shop inside a glass sphere, as an Ambisonics encoder (1st to 7th order, 16 channels at 3rd order up to 64 at 7th, ACN/SN3D, for the IEM and SPARTA decoders): grains fly round you, every sound is a point you can find, with distance, Doppler and a 64-line spatial reverb. It lives in the [`Mellyloon`](Mellyloon) folder of this repository.
+> **Spatial audio version: [Pinkie Pie's Balloon Palace](BalloonPalace/README.md).** The same shop inside a glass sphere, as an Ambisonics encoder (1st to 7th order, 16 channels at 3rd order up to 64 at 7th, ACN/SN3D, for the IEM and SPARTA decoders): grains fly round you, every sound is a point you can find, with distance, Doppler and a 64-line spatial reverb. It lives in the [`BalloonPalace`](BalloonPalace) folder of this repository.
 >
-> ![Mellyloon](Mellyloon/docs/screenshot.jpg)
+> ![Pinkie Pie's Balloon Palace](BalloonPalace/docs/screenshot.jpg)
 
 **[How to use it: the full help page](docs/HELP.md)** (the same guide is in the plug-in's library: click **help** in the top right corner).
 

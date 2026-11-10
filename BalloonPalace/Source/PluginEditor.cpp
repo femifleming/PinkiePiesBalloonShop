@@ -4873,11 +4873,11 @@ void FreakiePieEditor::drawPump (Graphics& g, const Pump& p, bool sound) const
     ignoreUnused (sound);
 }
 
-int mellyloonDbgFrames = 0;   // (counted by the tests, to measure the frame rate)
+int palaceDbgFrames = 0;   // (counted by the tests, to measure the frame rate)
 
 void FreakiePieEditor::paintContent (Graphics& g)
 {
-    ++mellyloonDbgFrames;
+    ++palaceDbgFrames;
     const auto full = Rectangle<float> (0, 0, (float) designW, (float) designH);
 
     applyTheme();

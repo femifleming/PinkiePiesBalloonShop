@@ -1,9 +1,9 @@
-# Mellyloon (the spatial audio Balloon Shop): help
+# Pinkie Pie's Balloon Palace (the spatial audio Balloon Shop): help
 
 This is the same guide you'll find inside the plug-in: click **help** in the top right corner to open the library, where Twilight reads in the corner.
 
 ![The library](../../docs/help/library.jpg)
-There's also a [PDF manual](manual/Mellyloon%20Manual.pdf) with all of this and more.
+There's also a [PDF manual](manual/Pinkie%20Pies%20Balloon%20Palace%20Manual.pdf) with all of this and more.
 
 ## Contents
 

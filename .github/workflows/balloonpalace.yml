@@ -1,21 +1,21 @@
-name: mellyloon (spatial audio)
+name: balloon palace (spatial audio)
 
-# Mellyloon, the spatial audio (3rd-order Ambisonics) version of the shop, in the Mellyloon folder.
-# Builds when it changes; a tag mellyloon-vX.Y.Z makes its own release (separate from the shop's vX.Y.Z).
+# Pinkie Pie's Balloon Palace, the spatial audio (Ambisonics) version of the shop, in the BalloonPalace folder.
+# Builds when it changes; a tag balloonpalace-vX.Y.Z makes its own release (separate from the shop's vX.Y.Z).
 on:
   push:
     branches: [ main ]
-    tags: [ 'mellyloon-v*' ]
-    paths: [ 'Mellyloon/**', '.github/workflows/mellyloon.yml' ]
+    tags: [ 'balloonpalace-v*' ]
+    paths: [ 'BalloonPalace/**', '.github/workflows/balloonpalace.yml' ]
   pull_request:
-    paths: [ 'Mellyloon/**', '.github/workflows/mellyloon.yml' ]
+    paths: [ 'BalloonPalace/**', '.github/workflows/balloonpalace.yml' ]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 env:
-  NAME: "Mellyloon"
+  NAME: "Pinkie Pies Balloon Palace"
 
 jobs:
   build:
@@ -25,13 +25,13 @@ jobs:
         include:
           - name: macOS
             os: macos-latest
-            package: Mellyloon-macOS.zip
+            package: PinkiePiesBalloonPalace-macOS.zip
           - name: Windows
             os: windows-latest
-            package: Mellyloon-Windows.zip
+            package: PinkiePiesBalloonPalace-Windows.zip
           - name: Linux
             os: ubuntu-22.04
-            package: Mellyloon-Linux.tar.gz
+            package: PinkiePiesBalloonPalace-Linux.tar.gz
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
@@ -52,18 +52,18 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then GEN="-G Ninja"; else GEN=""; fi
-          cmake -S Mellyloon -B build $GEN -DCMAKE_BUILD_TYPE=Release -DMELLYLOON_BUILD_TESTS=ON -DMELLYLOON_COPY_AFTER_BUILD=OFF
+          cmake -S BalloonPalace -B build $GEN -DCMAKE_BUILD_TYPE=Release -DBALLOONPALACE_BUILD_TESTS=ON -DBALLOONPALACE_COPY_AFTER_BUILD=OFF
 
       - name: Build
-        run: cmake --build build --config Release --target Mellyloon_All --parallel 4
+        run: cmake --build build --config Release --target BalloonPalace_All --parallel 4
 
       # the sound checks, on every system: the same offline tests as on the Mac (the full-interface
       # host tests stay on the Mac); Linux runs them on a virtual display
       - name: Test
         shell: bash
         run: |
-          cmake --build build --config Release --target MellyloonTest MellyloonSphereTest --parallel 4
-          for t in MellyloonTest MellyloonSphereTest; do
+          cmake --build build --config Release --target BalloonPalaceTest BalloonPalaceSphereTest --parallel 4
+          for t in BalloonPalaceTest BalloonPalaceSphereTest; do
             exe=$(find build -path "*${t}_artefacts*" -type f \( -name "$t" -o -name "$t.exe" \) | head -1)
             echo "== $t: $exe"
             set +e
@@ -78,37 +78,37 @@ jobs:
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
-          A=build/Mellyloon_artefacts/Release
+          A=build/BalloonPalace_artefacts/Release
           mkdir -p "dist/$NAME"
           cp -R "$A/Standalone/$NAME.app" "$A/AU/$NAME.component" "$A/VST3/$NAME.vst3" "dist/$NAME/"
           codesign --force --deep -s - "dist/$NAME/$NAME.app"
           codesign --force --deep -s - "dist/$NAME/$NAME.component"
           codesign --force --deep -s - "dist/$NAME/$NAME.vst3"
-          cp Mellyloon/README.md LICENSE "dist/$NAME/"
-          cp "Mellyloon/docs/manual/Mellyloon Manual.pdf" "dist/$NAME/"
+          cp BalloonPalace/README.md LICENSE "dist/$NAME/"
+          cp "BalloonPalace/docs/manual/Pinkie Pies Balloon Palace Manual.pdf" "dist/$NAME/"
           cd dist && ditto -c -k --keepParent "$NAME" "${{ matrix.package }}"
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $A = "build/Mellyloon_artefacts/Release"
+          $A = "build/BalloonPalace_artefacts/Release"
           New-Item -ItemType Directory -Force "dist/$env:NAME" | Out-Null
           Copy-Item -Recurse "$A/VST3/$env:NAME.vst3" "dist/$env:NAME/"
           Copy-Item "$A/Standalone/$env:NAME.exe" "dist/$env:NAME/"
-          Copy-Item Mellyloon/README.md, LICENSE "dist/$env:NAME/"
-          Copy-Item "Mellyloon/docs/manual/Mellyloon Manual.pdf" "dist/$env:NAME/"
+          Copy-Item BalloonPalace/README.md, LICENSE "dist/$env:NAME/"
+          Copy-Item "BalloonPalace/docs/manual/Pinkie Pies Balloon Palace Manual.pdf" "dist/$env:NAME/"
           Compress-Archive -Path "dist/$env:NAME" -DestinationPath "dist/${{ matrix.package }}"
 
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
-          A=build/Mellyloon_artefacts/Release
+          A=build/BalloonPalace_artefacts/Release
           mkdir -p "dist/$NAME"
           cp -R "$A/VST3/$NAME.vst3" "$A/LV2/$NAME.lv2" "dist/$NAME/"
           cp "$A/Standalone/$NAME" "dist/$NAME/"
-          cp Mellyloon/README.md LICENSE "dist/$NAME/"
-          cp "Mellyloon/docs/manual/Mellyloon Manual.pdf" "dist/$NAME/"
+          cp BalloonPalace/README.md LICENSE "dist/$NAME/"
+          cp "BalloonPalace/docs/manual/Pinkie Pies Balloon Palace Manual.pdf" "dist/$NAME/"
           tar -czf "dist/${{ matrix.package }}" -C dist "$NAME"
 
       - uses: actions/upload-artifact@v4
@@ -117,7 +117,7 @@ jobs:
           path: dist/${{ matrix.package }}
 
   release:
-    if: startsWith(github.ref, 'refs/tags/mellyloon-v')
+    if: startsWith(github.ref, 'refs/tags/balloonpalace-v')
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -127,12 +127,12 @@ jobs:
           path: packages
           merge-multiple: true
       - name: The manual
-        run: cp "Mellyloon/docs/manual/Mellyloon Manual.pdf" packages/
+        run: cp "BalloonPalace/docs/manual/Pinkie Pies Balloon Palace Manual.pdf" packages/
       - name: Checksums
         run: cd packages && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
-          name: Mellyloon (spatial audio) ${{ github.ref_name }}
+          name: Pinkie Pie's Balloon Palace (spatial audio) ${{ github.ref_name }}
           make_latest: false   # (the repo's "latest" release stays the Balloon Shop's: its README links to it)
           files: packages/*
           generate_release_notes: true

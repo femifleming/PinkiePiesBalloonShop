@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Builds the PDF manuals for Pinkie Pie's Balloon Shop and Mellyloon.
+"""Builds the PDF manuals for Pinkie Pie's Balloon Shop and Pinkie Pie's Balloon Palace.
 
 The help chapters, the parameters and the presets come out of the plug-ins themselves (the host
 tests dump them with MANUAL_DUMP=<folder>), so the manual can't drift from the code. Screenshots
-come from the host tests too (their screenshot runs, and SPHERE_SHOTS for Mellyloon). The pages are
+come from the host tests too (their screenshot runs, and SPHERE_SHOTS for the Balloon Palace). The pages are
 written as HTML and printed to PDF by Chrome (headless).
 
     python3 docs/manual/build_manual.py shop  <dump folder> <shots folder> <out.pdf>
-    python3 docs/manual/build_manual.py melly <dump folder> <shots folder> <out.pdf>
+    python3 docs/manual/build_manual.py palace <dump folder> <shots folder> <out.pdf>
 
 The shots folder is searched for files ending in the names used below (ui_cloudy.png, ht_cloudy.png
 and cloudy.png all match "cloudy").
@@ -24,9 +24,9 @@ SHOP = dict(
     tagline="A multi-effect you play as balloons.",
     accent="#ff4f9a", accent2="#ffc4e1",
 )
-MELLY = dict(
-    key="melly", name="Mellyloon", short="Mellyloon", version="0.2.0",
-    icon=os.path.join(REPO, "Mellyloon/Resources/icon/icon_1024.png"),
+PALACE = dict(
+    key="palace", name="Pinkie Pie's Balloon Palace", short="the Balloon Palace", version="0.2.1",
+    icon=os.path.join(REPO, "BalloonPalace/Resources/icon/icon_1024.png"),
     tagline="The Balloon Shop inside a glass sphere: an Ambisonics encoder, 1st to 7th order.",
     accent="#8a6bff", accent2="#d9ccff",
 )
@@ -109,7 +109,7 @@ FIGS = {
     "shop": dict(FIGS_COMMON, **{
         "Welcome": [("dragged", "Dragging a balloon.")],
     }),
-    "melly": dict(FIGS_COMMON, **{
+    "palace": dict(FIGS_COMMON, **{
         "The sphere": [("sphere_turned", "The sphere turned to look at it from above."), ("sphere_zoomed", "Zoomed in: the room behind blurs and darkens.")],
         "Grains in the sphere": [("sphere_scatter_orbit", "Scatter: one copy of the effects, its granulator grains flying to every grain."),
                                  ("sphere_six_lorenz", "Six grains flying the Lorenz attractor.")],
@@ -131,7 +131,7 @@ def groups(cfg, params):
                 out.append(by[i]); used.add(i)
         return out
     g = []
-    if cfg["key"] == "melly":
+    if cfg["key"] == "palace":
         g.append(("The sphere", "The tokens on the right and the jar.",
                   take(["grainMode", "grains", "deviate", "flight", "flightSpeed", "spread", "doppler"])))
     g.append(("Spectral smear (blue)", "", take(["sgMix", "sgFreeze", "sgTilt"])))
@@ -191,7 +191,7 @@ MAP_COMMON = [
 ]
 MAPS = {
     "shop": ("ui", MAP_COMMON + [((500, 455), "The bows on the shelf, one per effect, in the order the sound goes through them. Each holds its bunch of balloons.")]),
-    "melly": ("both", MAP_COMMON[:-1] + [
+    "palace": ("both", MAP_COMMON[:-1] + [
         ((545, 290), "The sphere: drag the empty glass to turn it, scroll or pinch to zoom, double-click to reset the view."),
         ((140, 200), "The energy map: where the sound is loudest, from the front."),
         ((190, 360), "The jar of grains: click for another, drag one into the sphere."),
@@ -226,10 +226,10 @@ brew install --cask pinkiepiesballoonshop</pre>
         zipname = "PinkiePiesBalloonShop"
         where = "the <a href='https://github.com/femifleming/PinkiePiesBalloonShop/releases/latest'>Releases page</a>"
     else:
-        n = "Mellyloon"
+        n = "Pinkie Pies Balloon Palace"
         brew = ""
-        zipname = "Mellyloon"
-        where = "the <a href='https://github.com/femifleming/PinkiePiesBalloonShop/releases'>Balloon Shop's Releases page</a> (its releases are tagged <code>mellyloon-v...</code>)"
+        zipname = "PinkiePiesBalloonPalace"
+        where = "the <a href='https://github.com/femifleming/PinkiePiesBalloonShop/releases'>Balloon Shop's Releases page</a> (its releases are tagged <code>balloonpalace-v...</code>)"
     return f"""
 <h2 id="install">Installing</h2>
 <p>Download it from {where}: <code>{zipname}-macOS.zip</code> (macOS 11 or later, Apple silicon and Intel), <code>{zipname}-Windows.zip</code> (Windows 10 or later, 64-bit) or <code>{zipname}-Linux.tar.gz</code> (x86-64). macOS gets an Audio Unit, a VST3 and a standalone app. Windows gets a VST3 and a standalone app, and Linux adds an LV2.</p>
@@ -255,8 +255,8 @@ cp -r "{n}/{n}.lv2" ~/.lv2/</pre>
 <p>You need CMake 3.22 or later and a C++20 compiler (Xcode, Visual Studio 2022, or GCC or Clang).</p>
 <pre>git clone --recursive https://github.com/femifleming/PinkiePiesBalloonShop.git
 cd PinkiePiesBalloonShop
-{"cmake -B build -DCMAKE_BUILD_TYPE=Release" if cfg["key"] == "shop" else "cmake -S Mellyloon -B build-mellyloon -DCMAKE_BUILD_TYPE=Release"}
-{"cmake --build build --config Release --target BalloonShop_All" if cfg["key"] == "shop" else "cmake --build build-mellyloon --config Release --target Mellyloon_All"}</pre>
+{"cmake -B build -DCMAKE_BUILD_TYPE=Release" if cfg["key"] == "shop" else "cmake -S BalloonPalace -B build-balloonpalace -DCMAKE_BUILD_TYPE=Release"}
+{"cmake --build build --config Release --target BalloonShop_All" if cfg["key"] == "shop" else "cmake --build build-balloonpalace --config Release --target BalloonPalace_All"}</pre>
 """
 
 def flow_section(cfg):
@@ -306,7 +306,7 @@ def gestures_section(cfg):
         ("Cursor to the top left corner", "The card: presets, scale and bypass."),
         ("Cursor to the left edge", "The order list. Drag an effect up or down, or roll the die."),
     ]
-    if cfg["key"] == "melly":
+    if cfg["key"] == "palace":
         rows += [
             ("Drag the empty glass", "Turn the sphere (your view only, never the sound)."),
             ("Scroll or pinch on the glass", "Zoom in towards the cursor."),
@@ -319,31 +319,31 @@ def gestures_section(cfg):
     return "<h2 id='gestures'>Quick reference: what your hands do</h2><table class='plain'>%s</table>" % body
 
 def trouble_section(cfg):
-    n = "Pinkie Pies Balloon Shop" if cfg["key"] == "shop" else "Mellyloon"
+    n = "Pinkie Pies Balloon Shop" if cfg["key"] == "shop" else "Pinkie Pies Balloon Palace"
     code = "Fkpi" if cfg["key"] == "shop" else "Fkps"
     items = [
         ("macOS says it can't be opened, or the DAW skips it",
          f"The builds aren't notarised. Run the <code>xattr</code> line from Installing, then rescan. To check the Audio Unit yourself: <code>auval -v aufx {code} Frkp</code>."),
         ("The sound changes on its own",
-         "Something in the weather is doing it. Clouds make the balloons inside them wander (and in Mellyloon the tokens too), auto weather changes the sky every few minutes, a storm's lightning lends a store effect for a while, and Trixie drops by now and then. Turn off cloudy and auto weather for a steady patch."),
+         "Something in the weather is doing it. Clouds make the balloons inside them wander (and in the Balloon Palace the tokens too), auto weather changes the sky every few minutes, a storm's lightning lends a store effect for a while, and Trixie drops by now and then. Turn off cloudy and auto weather for a steady patch."),
         ("Everything has stopped or gone still", "It's snowing: snow freezes the sound until you click the snowflake again. Also check the bypass on the card."),
         ("A rainboom went off by itself",
-         "Right-click the rainboom cloud: on hits, after storms" + (", on fast grains" if cfg["key"] == "melly" else "") + " and on throws each set one off. Untick the ones you don't want."),
+         "Right-click the rainboom cloud: on hits, after storms" + (", on fast grains" if cfg["key"] == "palace" else "") + " and on throws each set one off. Untick the ones you don't want."),
         ("A new instance doesn't start from the defaults",
          "Every new instance starts from the last patch you had open. A saved session still opens as you saved it. Reset (top right) puts everything back to the first preset."),
         ("It's loud, or a rainboom is too much", "The limiter keeps the output under -1 dBFS whatever happens. Turn the rainboom down in its menu (level)."),
     ]
-    if cfg["key"] == "melly":
+    if cfg["key"] == "palace":
         items.insert(0, ("I only hear one or two channels, or the map says the track has 2 channels",
-                         "The track needs as many channels as the order: 16 for 3rd order, 36 for 5th, 64 for 7th. In REAPER, the track's Route button, Track channels. Then put a decoder after Mellyloon."))
+                         "The track needs as many channels as the order: 16 for 3rd order, 36 for 5th, 64 for 7th. In REAPER, the track's Route button, Track channels. Then put a decoder after the Balloon Palace."))
         items.insert(1, ("It sounds wrong through my decoder",
-                         "Set the decoder to the same order as Mellyloon's order token, ACN channel order, SN3D normalisation (AmbiX). IEM's decoders use ACN and SN3D by default; in SPARTA pick ACN and SN3D."))
+                         "Set the decoder to the same order as the Balloon Palace's order token, ACN channel order, SN3D normalisation (AmbiX). IEM's decoders use ACN and SN3D by default; in SPARTA pick ACN and SN3D."))
     body = "".join("<h3>%s</h3><p>%s</p>" % (esc(a), b) for a, b in items)
     return "<h2 id='trouble'>Problems and answers</h2>" + body
 
 def credits_section(cfg):
     extra = ""
-    if cfg["key"] == "melly":
+    if cfg["key"] == "palace":
         extra = "<p>The ambisonic conventions follow the IEM Plug-in Suite and SPARTA; the energy map follows the IEM EnergyVisualizer; the distance model follows the IEM RoomEncoder and the reverb the IEM FdnReverb. The source-spread and distance ideas were checked against s3g-dsp. No code from these is included.</p>"
     return f"""<h2 id='credits'>Credits and license</h2>
 <p>This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators. The flying Rainbow Dash is by Nightmare Moon.</p>
@@ -352,7 +352,7 @@ def credits_section(cfg):
 <p>Built with JUCE. The code is released under the GNU Affero General Public License v3, as JUCE's free licence requires. The artwork is not covered by it.</p>
 <p>Source, releases and issues: <a href='https://github.com/femifleming/PinkiePiesBalloonShop'>github.com/femifleming/PinkiePiesBalloonShop</a>.</p>"""
 
-def melly_extra_sections():
+def palace_extra_sections():
     flights = [
         ("still", "Each grain stays where you dropped it."),
         ("orbit", "Each grain circles you on its own tilted ring."),
@@ -369,7 +369,7 @@ def melly_extra_sections():
     rows = "".join("<tr><td><b>%s</b></td><td>%s</td></tr>" % (a, esc(b)) for a, b in flights)
     return f"""
 <h2 id="ambisonics">Spatial audio: what comes out, and where it goes</h2>
-<p>Mellyloon is an encoder. It never plays straight to loudspeakers or headphones: it puts out a sound field, and a decoder after it turns that into speaker feeds or binaural headphones. That's what lets the same session play on any speaker layout.</p>
+<p>The Balloon Palace is an encoder. It never plays straight to loudspeakers or headphones: it puts out a sound field, and a decoder after it turns that into speaker feeds or binaural headphones. That's what lets the same session play on any speaker layout.</p>
 <table class="plain">
 <tr><td>Order</td><td>1st to 7th, set with the order token (3rd by default)</td></tr>
 <tr><td>Channels</td><td>(order + 1)<sup>2</sup>: 4, 9, 16, 25, 36, 49 or 64</td></tr>
@@ -384,12 +384,12 @@ def melly_extra_sections():
 <li>Pick the order with the order token (bottom right; 3rd by default).</li>
 <li>Give the track as many channels as that order needs, with the track's <b>Route</b> button, <i>Track channels</i>: 16 for 3rd order, 36 for 5th, 64 for 7th.</li>
 <li>After it, add a decoder at the same order: the IEM <b>AllRADecoder</b> for a loudspeaker layout, or the <b>BinauralDecoder</b> for headphones (SN3D). Add the IEM <b>EnergyVisualizer</b> too if you like.</li>
-<li>To send several Mellyloon tracks to one decoder, give them all the same order, feed a bus with the same number of channels, and decode once on the bus.</li>
+<li>To send several Balloon Palace tracks to one decoder, give them all the same order, feed a bus with the same number of channels, and decode once on the bus.</li>
 </ol>
 <p>Any host that can run a plug-in on that many channels works the same way. SPARTA's decoders work too: choose ACN and SN3D. On a track with too few channels for the order you picked, the highest order that fits comes out, and the map says so.</p>
 <h3>Which order?</h3>
 <p>A higher order pins every sound down more sharply. Through a decoder of the same order, a single point puts about 36 % of its energy within 20 degrees of where it is at 3rd order, 62 % at 5th and 83 % at 7th. You hear that most on a big dome of loudspeakers; through headphones the difference is small. It costs a little more: 16 grains with the reverb and the weather take about 23 % of one core at 3rd order, 26 % at 5th and 31 % at 7th (an Apple M2 Max at 48 kHz). The first time you pick 4th order or above, the sound pauses for a moment while the snow and the heatwave get ready for the extra channels.</p>
-<p>The one exception to "encoder only" is your own listening while you work: that's the decoder's job, so there's no headphone mode in Mellyloon itself.</p>
+<p>The one exception to "encoder only" is your own listening while you work: that's the decoder's job, so there's no headphone mode in the Balloon Palace itself.</p>
 
 <h2 id="flight">The flight modes</h2>
 <p>Pick one with the flight token; speed sets how fast (0.05x to 3x).</p>
@@ -478,7 +478,7 @@ def build(cfg, dump, shots_dir, out_pdf):
 
     # contents
     toc = [("about", "About this manual"), ("install", "Installing")]
-    if cfg["key"] == "melly": toc.append(("ambisonics", "Spatial audio: what comes out, and where it goes"))
+    if cfg["key"] == "palace": toc.append(("ambisonics", "Spatial audio: what comes out, and where it goes"))
     toc += [("window", "The window"), ("flow", "How the sound flows")]
     chap_ids = []
     for i, c in enumerate(chapters):
@@ -487,7 +487,7 @@ def build(cfg, dump, shots_dir, out_pdf):
     toc_html = "".join("<a href='#%s'>%s</a>" % (a, esc(b)) for a, b in toc)
     toc_html += "<a href='#guide'>The guide</a>" + "".join("<a class='ch' href='#%s'>%s</a>" % (cid, esc(c["title"])) for cid, c in zip(chap_ids, chapters))
     tail = []
-    if cfg["key"] == "melly": tail += [("flight", "The flight modes"), ("distance", "Distance and Doppler"), ("modes", "Grain modes")]
+    if cfg["key"] == "palace": tail += [("flight", "The flight modes"), ("distance", "Distance and Doppler"), ("modes", "Grain modes")]
     tail += [("gestures", "Quick reference: what your hands do"), ("params", "Parameter reference"), ("store", "The balloon store's effects"),
              ("presets", "Presets"), ("trouble", "Problems and answers"), ("credits", "Credits and license")]
     toc_html += "".join("<a href='#%s'>%s</a>" % (a, esc(b)) for a, b in tail)
@@ -498,13 +498,13 @@ def build(cfg, dump, shots_dir, out_pdf):
         about = """<p>The Balloon Shop is a multi-effect you play as balloons. Every balloon is a control, and how full it is shows its value. Your sound goes through a chain of effects in an order you set, the weather changes it, pumps blow up plucked notes or catch sounds into frozen balloons, and a little cloud sets off a sonic rainboom.</p>
 <p>This manual covers version 1.1.1. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, a map of the window and how the sound flows. After it there's a quick reference for gestures, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>"""
     else:
-        about = """<p>Mellyloon is the Balloon Shop inside a glass sphere: an Ambisonics encoder, from 1st to 7th order (3rd by default). Stereo comes in; a sound field comes out (16 channels at 3rd order, 36 at 5th, 64 at 7th), for a decoder to play on loudspeakers or headphones. Little bouquets of balloons fly round inside the sphere, each carrying its own copy of the effects, and every sound is a single point you can hear and find, with its distance, its Doppler shift and one reverb for the whole sphere.</p>
-<p>This manual covers version 0.2.0. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, how to route it to a decoder, a map of the window and how the sound flows. After it there are the flight modes, distance and Doppler, a gesture reference, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>
+        about = """<p>Pinkie Pie's Balloon Palace is the Balloon Shop inside a glass sphere: an Ambisonics encoder, from 1st to 7th order (3rd by default). Stereo comes in; a sound field comes out (16 channels at 3rd order, 36 at 5th, 64 at 7th), for a decoder to play on loudspeakers or headphones. Little bouquets of balloons fly round inside the sphere, each carrying its own copy of the effects, and every sound is a single point you can hear and find, with its distance, its Doppler shift and one reverb for the whole sphere.</p>
+<p>This manual covers version 0.2.1. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, how to route it to a decoder, a map of the window and how the sound flows. After it there are the flight modes, distance and Doppler, a gesture reference, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>
 <p>Everything in the Balloon Shop is here too, so the shop's own manual also applies.</p>"""
     parts.append("<h2 id='about'>About this manual</h2>" + about)
     parts.append(install_section(cfg))
-    if cfg["key"] == "melly":
-        parts.append(melly_extra_sections().split('<h2 id="flight">')[0])
+    if cfg["key"] == "palace":
+        parts.append(palace_extra_sections().split('<h2 id="flight">')[0])
     parts.append("<h2 id='window'>The window</h2><p>The numbers on the picture match the list under it. The window can be resized from its corner; everything scales together.</p>" + window_map(cfg, shots))
     parts.append(flow_section(cfg))
 
@@ -516,8 +516,8 @@ def build(cfg, dump, shots_dir, out_pdf):
         fs = "".join(figure(shots, s, cap) for s, cap in figs.get(c["title"], []))
         parts.append("<h2 id='%s'%s>%s</h2>%s%s" % (cid, " class='keep'" if i == 0 else "", esc(c["title"]), body, fs))
 
-    if cfg["key"] == "melly":
-        rest = melly_extra_sections()
+    if cfg["key"] == "palace":
+        rest = palace_extra_sections()
         parts.append('<h2 id="flight">' + rest.split('<h2 id="flight">')[1])
     parts.append(gestures_section(cfg))
 
@@ -550,4 +550,4 @@ def build(cfg, dump, shots_dir, out_pdf):
 
 if __name__ == "__main__":
     which, dump, shots, out = sys.argv[1:5]
-    build(SHOP if which == "shop" else MELLY, dump, shots, out)
+    build(SHOP if which == "shop" else PALACE, dump, shots, out)
