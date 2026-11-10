@@ -90,6 +90,29 @@ sudo apt-get install libasound2-dev libjack-jackd2-dev libfreetype-dev libfontco
 
 The tests (`-DBALLOONSHOP_BUILD_TESTS=ON`) check the sound and drive the whole interface headlessly, saving screenshots as they go.
 
+## Human contributions
+
+Pinkie Pie's Balloon Shop's code was written with Claude Code (Anthropic), working under the direction of its author, [femifleming](https://github.com/femifleming). This is what the author brought to it:
+
+- **The original plug-in.** It started as *FreakiePie*: a live multi-effect with a spectral smear, a scale-quantised pitch shifter with feedback, a live granulator, a 500 Hz high-passed FDN reverb and a master feedback loop. It had a sad, tired Pinkie Pie theme and La Monte Young's *Well-Tuned Piano* scale.
+- **Balloons as the instrument.** Every control is a balloon in one bouquet, with its name on it. Drag balloons down and they float back up. A pin pops them, and a hand pump catches sound into frozen granular balloons that stay until you pop them.
+- **The weather.** Rain adds a low-pass and helium a high-pass. Clouds bring thunder, lightning and random effect balloons. Snow fades into a spectral freeze over 5 s to 5 min. The heatwave is a slow, Paulstretch-like smear, and auto weather changes by itself.
+- **The references.** The store's effects come from SoundGrain's FX balls. Alexander Mesker's thesis on Autechre was handed over as a source of ideas, and the sonic rainboom comes from *My Little Pony: Friendship Is Magic*.
+- **The cast and the pictures.** The author supplied the character pictures, the preset backgrounds and the library background.
+  - Pinkie's moods for rain, snow, heat, fright, sleep and the crystal look.
+  - Twilight studying in the help library.
+  - A pony waiting by the chalkboard.
+  - Trixie's rare visits.
+- **The name, title font and icon.** From "Balloon Shoppe" to "Pinkie Pie's Balloon Shop", with the *Friendship is Magic* font and a plain gradient icon.
+- **Sound decisions.**
+  - Western scales back alongside the microtonal ones.
+  - Random wave-folded saw plucks for the inflate sound.
+  - An EQ range of +-24 dB and FFT sizes up to 16384.
+  - An output that never clips.
+  - The default patch.
+- **Layout, by choosing and testing.** The author chose the store look, the film-strip preset card and the slide-out drag-to-reorder list from mock-ups. They asked for menus to sit above the balloons and clouds, and rejected several redesigns.
+- **The release.** Builds for macOS, Windows and Linux, a README, help, a Homebrew install and PDF manuals.
+
 ## Credits and notes
 
 - This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators.

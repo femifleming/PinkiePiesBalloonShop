@@ -68,6 +68,24 @@ With `-DMELLYLOON_BUILD_TESTS=ON` you also get three test programs: `MellyloonSp
 - The master weather filters, snow, heatwave, EQ, leveler and limiter run on all 16 channels, the leveler and limiter linked. Snow and the heatwave resynthesise each channel separately, which makes a frozen scene diffuse.
 - On an Apple M2 Max, 16 grains in spatial mode take about 20 to 24 % of one core at 48 kHz (measured by the sphere test).
 
+## Human contributions
+
+Mellyloon's code was written with Claude Code (Anthropic), working under the direction of its author, [femifleming](https://github.com/femifleming). This is what the author brought to it:
+
+- **The concept.** A spatial version of the Balloon Shop that feels exactly like it, with the balloons in a sphere you can turn. Stereo goes in, and it encodes 16 channels for a decoder.
+- **The references.**
+  - The IEM plug-ins, SPARTA and SPAT for how it should work.
+  - The IEM EnergyVisualizer for the meter.
+  - The IEM GranularEncoder and FdnReverb as the bar for sound quality.
+  - The RoomEncoder and s3g-dsp for distance.
+- **Grains as copies of the effects.** Up to 16 grains, each with its own copy of the effects and its own deviated modulation, flying through the whole inside of the sphere. There is also an option for plain random grains, and one shared reverb.
+- **Third-order Ambisonics only.** The author dropped the binaural mode for a separate decoder. They tested it in REAPER through an IEM decoder and asked for the encoding to be checked when they heard phasing.
+- **Distance, not width.** The sound is 360 degrees at all times, so spread became distance, from 1 to 50 m, "a small bubble vs a large bubble", with a Doppler switch.
+- **More motion.** More flight modes, all moved by the clouds as well.
+- **The view.** Balloons fly into the globe when you release them, the sphere zooms, and the background blurs and darkens as you zoom in, at a smooth frame rate.
+- **The name.** "Mellyloon", clearly labelled an encoder and kept in the Balloon Shop repo.
+- **Listening fixes.** The author found frozen balloons too quiet and asked for the gain staging to be audited.
+
 ## Credits and notes
 
 - This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators.
