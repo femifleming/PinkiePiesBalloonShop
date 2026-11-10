@@ -85,6 +85,7 @@ static void writeWav (const juce::File& f, const std::vector<std::vector<float>>
 
 int main (int argc, char** argv)
 {
+    std::setvbuf (stdout, nullptr, _IONBF, 0);   // (every line out as it happens, so a crash shows where)
     juce::ScopedJuceInitialiser_GUI gui;
     FreakiePieProcessor::rememberLastState = false;
     const juce::File outDir = argc > 1 ? juce::File (argv[1]) : juce::File::getCurrentWorkingDirectory();
