@@ -13,3 +13,4 @@ shot*.png
 .vscode/
 .idea/
 *.swp
+build-*/
