@@ -205,6 +205,10 @@ struct FreakieTestAccess
     static void cloudsBack (FreakiePieEditor& e, const std::vector<FreakiePieEditor::SkyCloud>& saved) { e.skyClouds = saved; }
     static float cloudVis (FreakiePieEditor& e) { return e.cloudVis; }
     static float flash (FreakiePieEditor& e) { return e.flash; }
+    static Rectangle<float> rainboomButton (FreakiePieEditor& e) { return e.rainboomButton; }
+    static bool rainboomShowing (FreakiePieEditor& e) { return e.rainboomLayer->isVisible(); }
+    static Point<float> boomAt (FreakiePieEditor& e) { return e.boomScene.at; }
+    static void throwBalloon (FreakiePieEditor& e, Floater& f, Point<float> v) { f.flickVel = v; e.rainboomFromThrow (f); }
     static uint32_t lent (FreakiePieEditor& e) { return e.lentShown; }
     // a click goes to whatever is on top there: the weather row, the order row, or else the room itself
     static void press (Component& c, Point<float> local, int clicks = 1)
@@ -2151,6 +2155,87 @@ int main (int argc, char** argv)
             std::printf ("lightning: store balloons %d -> up to %d, back to %d after the storm (lent 0x%03x), flash seen %d\n",
                          (int) baseline, (int) most, (int) end, (unsigned) FreakieTestAccess::lent (e), shotStrike);
             if (most < baseline + 4 || end != baseline || FreakieTestAccess::lent (e) != 0 || ! shotStrike) FAIL_HERE();
+
+            // the sonic rainboom: click the little cloud; a dive, the boom, the ring, the rainbow left behind,
+            // and the balloons knocked back by the shockwave
+            {
+                AudioBuffer<float> tone (2, 512);
+                double ph = 0.0;
+                float peak = 0.0f; bool finite = true;
+                auto play = [&] (double seconds)
+                {
+                    for (int k = 0; k < (int) (seconds * 48000 / 512); ++k)
+                    {
+                        for (int i = 0; i < 512; ++i) { const float v = 0.15f * (float) std::sin (ph); ph += fp::kTwoPi * 330.0 / 48000.0; tone.setSample (0, i, v); tone.setSample (1, i, v); }
+                        p.processBlock (tone, mm);
+                        peak = jmax (peak, tone.getMagnitude (0, 512));
+                        for (int i = 0; i < 512; ++i) finite &= std::isfinite (tone.getSample (0, i));
+                        tickUi();
+                    }
+                };
+                play (1.0);
+                const int booms0 = p.rainboomBooms.load(), dives0 = p.rainboomDives.load();
+                FreakieTestAccess::clickAt (e, FreakieTestAccess::rainboomButton (e));
+                play (0.45);
+                const bool diving = p.rainboomDives.load() == dives0 + 1 && FreakieTestAccess::rainboomShowing (e);
+                shoot ("_rainboom_dive.png");
+                std::vector<Point<float>> before;
+                for (int i = 0; i < FreakieTestAccess::count (e); ++i) before.push_back (FreakieTestAccess::balloon (e, i).pos);
+                int guard = 0;
+                while (p.rainboomBooms.load() == booms0 && ++guard < 200) play (512.0 / 48000.0);
+                play (0.1);
+                shoot ("_rainboom_boom.png");
+                play (0.45);
+                shoot ("_rainboom_ring.png");
+                float pushed = 0.0f; int counted = 0;
+                const auto at = FreakieTestAccess::boomAt (e);
+                for (int i = 0; i < (int) before.size(); ++i)
+                    if (FreakieTestAccess::balloon (e, i).alive && before[(size_t) i].getDistanceFrom (at) < 500.0f)
+                    {
+                        pushed += FreakieTestAccess::balloon (e, i).pos.getDistanceFrom (at) - before[(size_t) i].getDistanceFrom (at);
+                        ++counted;
+                    }
+                pushed /= (float) jmax (1, counted);
+                play (2.0);
+                shoot ("_rainboom_rainbow.png");
+                play (6.0);
+                const bool gone = ! FreakieTestAccess::rainboomShowing (e);
+                std::printf ("rainboom: dived %d, boomed %d, balloons near it pushed out %.0f px on average (%d), the layer gone after %d, peak %.1f dBFS, finite %d\n",
+                             diving, p.rainboomBooms.load() - booms0, pushed, counted, gone, 20.0 * std::log10 (jmax (1e-9f, peak)), finite);
+                if (! diving || p.rainboomBooms.load() != booms0 + 1 || pushed < 15.0f || ! gone || peak > 0.95f || ! finite) FAIL_HERE();
+
+                // what else sets one off: a throw, a hit in the sound, the rain stopping
+                const int b1 = p.rainboomBooms.load();
+                FreakieTestAccess::throwBalloon (e, FreakieTestAccess::balloon (e, 0), { 2600.0f, -1800.0f });
+                play (1.0);
+                const bool byThrow = p.rainboomBooms.load() == b1 + 1;
+                p.apvts.getParameter (ids::rbHits)->setValueNotifyingHost (1.0f);
+                const int b2 = p.rainboomBooms.load();
+                play (2.0);   // (a steady tone: no hits)
+                const bool steadyQuiet = p.rainboomBooms.load() == b2;
+                for (int k = 0; k < 2; ++k)
+                {
+                    for (int i = 0; i < 2 * 48000 / 512; ++i) { sil.clear(); p.processBlock (sil, mm); tickUi(); }   // (cleared each time: it's processed in place)
+                    AudioBuffer<float> hit (2, 512);
+                    for (int i = 0; i < 512; ++i) { const float v = 0.6f * std::exp (-(float) i / 80.0f) * (float) std::sin (i * 0.3); hit.setSample (0, i, v); hit.setSample (1, i, v); }
+                    p.processBlock (hit, mm); tickUi();
+                }
+                for (int i = 0; i < 48000 / 512; ++i) { sil.clear(); p.processBlock (sil, mm); tickUi(); }
+                const int byHits = p.rainboomBooms.load() - b2;
+                p.apvts.getParameter (ids::rbHits)->setValueNotifyingHost (0.0f);
+                p.apvts.getParameter (ids::rbStorms)->setValueNotifyingHost (1.0f);
+                p.apvts.getParameter (ids::rain)->setValueNotifyingHost (1.0f);
+                play (0.5);
+                const int b3 = p.rainboomBooms.load();
+                p.apvts.getParameter (ids::rain)->setValueNotifyingHost (0.0f);
+                play (1.5);
+                const bool byStorm = p.rainboomBooms.load() == b3 + 1;
+                p.apvts.getParameter (ids::rbStorms)->setValueNotifyingHost (0.0f);
+                std::printf ("rainboom triggers: a throw %d, a steady tone sets none off %d, two hits -> %d booms, the rain stopping %d\n",
+                             byThrow, steadyQuiet, byHits, byStorm);
+                if (! byThrow || ! steadyQuiet || byHits != 2 || ! byStorm) FAIL_HERE();
+                play (8.0);
+            }
 
             // the bypass switch on the info card (with the card out)
             FreakieTestAccess::showCard (e, true);

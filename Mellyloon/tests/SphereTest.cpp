@@ -591,6 +591,68 @@ int main (int argc, char** argv)
         }
     }
 
+    std::printf ("the sonic rainboom in the sphere\n");
+    {
+        auto silence = [] (int) { return std::pair<float, float> { 0.0f, 0.0f }; };
+        // where a stretch of the output points (the W-weighted first-order intensity) and how sharply
+        // (1: a single point, 0: all round you)
+        struct Aim { Vec3 dir; double sharp; };
+        auto aim = [] (const Run& r, double from, double to)
+        {
+            double ix = 0, iy = 0, iz = 0, e = 0;
+            for (size_t i = (size_t) (from * SR); i < std::min (r.out[0].size(), (size_t) (to * SR)); ++i)
+            {
+                const double w = r.out[0][i];
+                ix += w * r.out[3][i]; iy += w * r.out[1][i]; iz += w * r.out[2][i]; e += w * w;
+            }
+            const double l = std::sqrt (ix * ix + iy * iy + iz * iz);
+            return Aim { Vec3 { (float) (ix / std::max (l, 1e-12)), (float) (iy / std::max (l, 1e-12)), (float) (iz / std::max (l, 1e-12)) }, l / std::max (e, 1e-12) };
+        };
+        auto dot = [] (Vec3 a, Vec3 b) { return (double) (a.x * b.x + a.y * b.y + a.z * b.z); };
+
+        FreakiePieProcessor p;
+        allOff (p);
+        setParam (p, ids::balloonSfx, 0.0f);
+        setParam (p, ids::rbLevel, 1.0f);
+        fp::DistanceSource::withWalls = false;   // (the direct paths alone, to see where things are)
+        render (p, 16, 0.2, silence, false);
+        const int b0 = p.rainboomBooms.load();
+        p.requestRainboom (0.7f);
+        auto r = render (p, 16, 3.0, silence, true, false);
+        fp::DistanceSource::withWalls = true;
+        const Vec3 at { p.rbAtX.load(), p.rbAtY.load(), p.rbAtZ.load() };
+        const auto early = aim (r, 0.15, 0.3), late = aim (r, 0.6, 0.69);
+        const Vec3 from { p.rbFromX.load(), p.rbFromY.load(), p.rbFromZ.load() };
+        check (dot (early.dir, from.normalised()) > 0.6 && dot (late.dir, at.normalised()) > 0.6,
+               "the dive comes in from outside the glass and flies to where it breaks",
+               "early in the dive " + juce::String (dot (early.dir, from.normalised()), 2) + " towards where it came from, late " + juce::String (dot (late.dir, at.normalised()), 2) + " towards where it breaks");
+        const double tb = 0.7 + at.length() * 7.07 / 343.0;   // (it reaches you at the speed of sound)
+        const auto boom = aim (r, tb, tb + 0.05);
+        check (p.rainboomBooms.load() == b0 + 1 && dot (boom.dir, at.normalised()) > 0.8 && boom.sharp > 0.5,
+               "the boom comes from where it broke", "cosine " + juce::String (dot (boom.dir, at.normalised()), 2) + ", sharpness " + juce::String (boom.sharp, 2));
+        const auto ring = aim (r, tb + 0.9, tb + 1.6);
+        check (ring.sharp < 0.6 * boom.sharp, "then the rainbow ring opens out past you and surrounds you",
+               "sharpness " + juce::String (boom.sharp, 2) + " at the boom, " + juce::String (ring.sharp, 2) + " a second later");
+        double pk = 0; bool fin = true;
+        for (auto& ch : r.out) for (float v : ch) { pk = std::max (pk, (double) std::abs (v)); fin &= std::isfinite (v); }
+        check (fin && pk <= 0.892, "finite, under the ceiling", juce::String (db (pk), 1) + " dBFS");
+
+        // a grain flying fast enough breaks it where the grain is
+        FreakiePieProcessor q;
+        allOff (q);
+        setParam (q, ids::grains, 4.0f); setParam (q, ids::flight, 1.0f); setParam (q, ids::flightSpeed, 1.0f);
+        setParam (q, ids::spread, 1.0f);   // a 50 m bubble: the grains go fast
+        setParam (q, ids::rbFast, 1.0f);
+        const auto rq = render (q, 16, 6.0, silence, false);
+        check (q.rainboomBooms.load() >= 1 && rq.finite, "a grain flying past 30 m/s sets one off", juce::String (q.rainboomBooms.load()) + " in 6 s");
+        FreakiePieProcessor q2;
+        allOff (q2);
+        setParam (q2, ids::grains, 4.0f); setParam (q2, ids::flight, 1.0f); setParam (q2, ids::flightSpeed, 0.2f);
+        setParam (q2, ids::rbFast, 1.0f);
+        render (q2, 16, 6.0, silence, false);
+        check (q2.rainboomBooms.load() == 0, "slow grains don't", juce::String (q2.rainboomBooms.load()) + " in 6 s");
+    }
+
     std::printf ("scatter: one chain, its grains flying to 8 places\n");
     {
         FreakiePieProcessor p;

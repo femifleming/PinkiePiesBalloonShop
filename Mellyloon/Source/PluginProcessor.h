@@ -11,6 +11,7 @@
 #include "dsp/AutoWeather.h"
 #include "dsp/Stutter.h"
 #include "dsp/TrixieNoise.h"
+#include "dsp/Rainboom.h"
 #include "dsp/Ambi.h"
 #include "dsp/Flight.h"
 #include "dsp/SpatialGranulator.h"
@@ -81,6 +82,14 @@ namespace ids
     inline constexpr const char* flight     = "flight";       // how they move: still, orbit, lorenz, flock, random
     inline constexpr const char* flightSpeed = "flightSpeed";
     inline constexpr const char* spread     = "spread";       // how far out they fly (0 the middle, 1 the sphere's skin)
+    // the sonic rainboom: something flies so fast the sound breaks, with a boom and a rainbow ring
+    inline constexpr const char* rbBoom     = "rbBoom";       // a switch: off -> on starts one (a dive, then the boom)
+    inline constexpr const char* rbLevel    = "rbLevel";      // how loud it is
+    inline constexpr const char* rbTail     = "rbTail";       // how long the rainbow rings on (s)
+    inline constexpr const char* rbHits     = "rbHits";       // a hit in the input sets one off (no dive)
+    inline constexpr const char* rbStorms   = "rbStorms";     // the rain stopping sets one off
+    inline constexpr const char* rbThrows   = "rbThrows";     // flinging a balloon hard enough sets one off
+    inline constexpr const char* rbFast     = "rbFast";       // a grain flying fast enough sets one off, where it is
     inline constexpr const char* grainsLevel = "grainsLevel"; // the frozen balloons' volume     // the effects (chain + store) step aside: input, tone and frozen balloons only
 
     // the balloon store: per effect, whether you own it, its two controls, its level and its width
@@ -168,6 +177,24 @@ public:
     std::atomic<float> thunderAmount { 0.0f }, cloudAmount { 0.0f }, bypassAmount { 0.0f };
     std::atomic<float> snowAmount { 0.0f };   // how frozen the output is (0..1)
     std::atomic<float> heatAmount { 0.0f };   // how far the heatwave has come in (0..1)
+
+    // the rainboom: the editor asks for one (the button; a balloon flung hard, following it to where it
+    // breaks); where it is, for the pictures
+    void requestRainboom (float diveSeconds, bool followTarget = false) noexcept
+    {
+        rbRequestDive.store (diveSeconds); rbRequestFollow.store (followTarget); rbRequests.fetch_add (1);
+    }
+    std::atomic<float> rbTargetX { 0.0f }, rbTargetY { 0.0f }, rbTargetZ { 0.0f };   // (the flung balloon, written by the editor)
+    std::atomic<int> rainboomBooms { 0 }, rainboomDives { 0 };
+    std::atomic<float> rainboomDiveLeft { 0.0f };
+    std::atomic<float> rbAtX { 0.0f }, rbAtY { 0.0f }, rbAtZ { 0.0f };      // where it breaks (fractions of the radius)
+    std::atomic<float> rbNowX { 0.0f }, rbNowY { 0.0f }, rbNowZ { 0.0f };   // the flyer, while diving
+    std::atomic<float> rbFromX { 0.0f }, rbFromY { 0.0f }, rbFromZ { 0.0f };   // where it dived in from
+    static float ringRadius (double secondsSinceArrival) noexcept   // the rainbow ring (fractions of the radius): the sound and the picture share it
+    {
+        return secondsSinceArrival <= 0.0 ? 0.0f : 2.4f * (1.0f - (float) std::exp (-secondsSinceArrival / 0.55));
+    }
+    static constexpr float rbGap = 0.035f;   // seconds between the colours
 
     // auto weather: while its switch is on, time passing (on the message thread) changes the sky
     void autoWeatherStep (double seconds);
@@ -262,6 +289,26 @@ private:
     std::array<std::unique_ptr<fp::SnowFreeze>, kPairs> snowFreeze;
     std::array<std::unique_ptr<fp::HeatWave>, kPairs> heatWave;
     fp::AutoWeather autoSky;
+    fp::Rainboom rainboom;
+    fp::HitDetector rbHitsDetector;
+    fp::DistanceSource rbDiveDist, rbBoomDist;
+    std::vector<float> rbMono, rbTmp;
+    std::array<fp::ambi::Coefs, fp::Rainboom::kBands> rbRingWas {};
+    std::array<fp::ambi::Vec3, 16> rbPrev {};
+    fp::ambi::Vec3 rbFrom {}, rbAt {}, rbNow {};
+    int rbFollowGrain = -1;
+    bool rbFollowTarget = false;
+    float rbFastWait = 0.0f;
+    bool rbPrevValid = false;
+    std::atomic<int> rbRequests { 0 };
+    std::atomic<float> rbRequestDive { 0.7f };
+    std::atomic<bool> rbRequestFollow { false };
+    int rbRequestsSeen = 0, rbBoomsSeen = 0;
+    bool rbButtonWas = false, rbRainWas = false;
+    juce::Random rbRnd;
+    std::atomic<float>* p_rbBoom = nullptr; std::atomic<float>* p_rbLevel = nullptr; std::atomic<float>* p_rbTail = nullptr;
+    std::atomic<float>* p_rbHits = nullptr; std::atomic<float>* p_rbStorms = nullptr; std::atomic<float>* p_rbFast = nullptr;
+    void rainboomBlock (const float* inL, const float* inR, float* const* busW, float* const* sendW, int n, float sphereMetres, int count, float seconds);
     bool autoWasOn = false;
     double lastTimerMs = 0.0;
     void timerCallback() override;

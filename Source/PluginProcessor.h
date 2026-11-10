@@ -11,6 +11,7 @@
 #include "dsp/AutoWeather.h"
 #include "dsp/Stutter.h"
 #include "dsp/TrixieNoise.h"
+#include "dsp/Rainboom.h"
 #include "Presets.h"
 
 // a snow fade time as people say it: "12 s", "1 min 20 s", "5 min"
@@ -69,6 +70,13 @@ namespace ids
     inline constexpr const char* autoWeather = "autoWeather"; // the weather changes by itself, a spell every few minutes
     inline constexpr const char* cloudy     = "cloudy";       // clouds drift among the balloons; thunder; with rain, lightning
     inline constexpr const char* fxBypass   = "fxBypass";
+    // the sonic rainboom: something flies so fast the sound breaks, with a boom and a rainbow
+    inline constexpr const char* rbBoom     = "rbBoom";       // a switch: off -> on starts one (a dive, then the boom)
+    inline constexpr const char* rbLevel    = "rbLevel";      // how loud it is
+    inline constexpr const char* rbTail     = "rbTail";       // how long the rainbow rings on (s)
+    inline constexpr const char* rbHits     = "rbHits";       // a hit in the input sets one off (no dive)
+    inline constexpr const char* rbStorms   = "rbStorms";     // the rain stopping sets one off
+    inline constexpr const char* rbThrows   = "rbThrows";     // flinging a balloon hard enough sets one off
     inline constexpr const char* grainsLevel = "grainsLevel"; // the frozen balloons' volume     // the effects (chain + store) step aside: input, tone and frozen balloons only
 
     // the balloon store: per effect, whether you own it, its two controls, its level and its width
@@ -156,6 +164,11 @@ public:
     std::atomic<float> snowAmount { 0.0f };   // how frozen the output is (0..1)
     std::atomic<float> heatAmount { 0.0f };   // how far the heatwave has come in (0..1)
 
+    // the rainboom: the editor asks for one (a balloon flung hard, the rainbow button); counters for its pictures
+    void requestRainboom (float diveSeconds) noexcept { rbRequestDive.store (diveSeconds); rbRequests.fetch_add (1); }
+    std::atomic<int> rainboomBooms { 0 }, rainboomDives { 0 };
+    std::atomic<float> rainboomDiveLeft { 0.0f };   // seconds until the boom, while diving
+
     // auto weather: while its switch is on, time passing (on the message thread) changes the sky
     void autoWeatherStep (double seconds);
     void keepSnowAndHeatApart();   // (on the message thread, once a second)
@@ -181,6 +194,16 @@ private:
     fp::SnowFreeze snowFreeze;
     fp::HeatWave heatWave;
     fp::AutoWeather autoSky;
+    fp::Rainboom rainboom;
+    fp::HitDetector rbHitsDetector;
+    juce::AudioBuffer<float> rbMono;
+    std::atomic<int> rbRequests { 0 };
+    std::atomic<float> rbRequestDive { 0.7f };
+    int rbRequestsSeen = 0;
+    bool rbButtonWas = false, rbRainWas = false;
+    std::atomic<float>* p_rbBoom = nullptr; std::atomic<float>* p_rbLevel = nullptr; std::atomic<float>* p_rbTail = nullptr;
+    std::atomic<float>* p_rbHits = nullptr; std::atomic<float>* p_rbStorms = nullptr;
+    void rainboomBlock (const float* inL, const float* inR, float* oL, float* oR, int n);
     bool autoWasOn = false;
     double lastTimerMs = 0.0;
     void timerCallback() override;

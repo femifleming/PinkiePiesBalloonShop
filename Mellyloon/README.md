@@ -11,6 +11,7 @@ The same multi-effect you play as balloons, inside a glass sphere you can turn r
 - **Flight.** Still, orbit, the Lorenz attractor, a flock (boids), random glides, a spiral, Lissajous loops, the Rossler attractor, breathing in and out, falling, or ping-pong across the sphere, with speed, inside a bubble whose size is the Distance knob (1 m to 50 m). When it's cloudy, the flight, speed, distance, deviate and grains tokens wander by themselves.
 - **Distance, after the IEM RoomEncoder.** Every sound is a point with its own propagation delay (so moving sounds Doppler-shift; a switch turns that off and keeps their pitch), 1/r level, a little air absorption and first-order reflections from the walls of a room round the sphere.
 - **Weather in the sphere.** Clouds, rain, snow and heat drift through the glass as patches. A grain they pass over has its settings shaken up at random; snow freezes it and the heat smears it.
+- **Sonic rainboom.** Something dives in from outside the glass and breaks the sound barrier, at a place it picks, where you fling a balloon, or where a grain is flying fast enough. A double-crack boom comes from that point. Then seven rings, one per colour of your sound (red the lows, violet the highs), open out round it, pass over you and leave through the glass.
 - **One reverb** for the whole sphere, built like the IEM FdnReverb: 64 lines with IEM's prime delay recipe, Hadamard mixing and frequency-dependent decay, run on all 16 channels.
 - **An energy map** after the IEM EnergyVisualizer, on the glass and flat at the top left.
 

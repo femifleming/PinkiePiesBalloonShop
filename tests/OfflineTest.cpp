@@ -2,6 +2,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "../Source/dsp/Engine.h"
+#include "../Source/dsp/Rainboom.h"
 #include <chrono>
 #include <cstdio>
 
@@ -184,6 +185,142 @@ int main()
             const float* ch[1] = { cap.data() };
             writer->writeFromFloatArrays (ch, 1, (int) cap.size());
             std::printf ("6. wrote %s\n", out.getFullPathName().toRawUTF8());
+        }
+    }
+
+    // 7. the sonic rainboom: the dive rises in pitch, the boom is an N-wave on time, the colours
+    // arrive red first and violet last, red on the left and violet on the right, and it rings out
+    {
+        auto check = [&] (bool ok, const char* what, const juce::String& detail = {})
+        {
+            std::printf ("7. [%s] %s %s\n", ok ? " ok " : "FAIL", what, detail.toRawUTF8());
+            if (! ok) ++failures;
+        };
+        constexpr int B = 256;
+        auto render = [&] (Rainboom& rb, double seconds, auto gen, float level, std::vector<float>* L, std::vector<float>* R,
+                           std::vector<float>* dive, std::vector<float>* boom, std::array<std::vector<float>, Rainboom::kBands>* bands,
+                           double fireAt = 0.0, float diveSec = 0.7f)
+        {
+            Rainboom::Settings st; st.tailSeconds = 5.0f;
+            std::vector<float> in (B), oL (B), oR (B);
+            bool fired = false;
+            for (int pos = 0; pos < (int) (seconds * SR); pos += B)
+            {
+                if (! fired && pos >= (int) (fireAt * SR)) { rb.fire (diveSec); fired = true; }
+                for (int i = 0; i < B; ++i) in[(size_t) i] = gen (pos + i);
+                rb.process (in.data(), B, st);
+                std::fill (oL.begin(), oL.end(), 0.0f); std::fill (oR.begin(), oR.end(), 0.0f);
+                rb.addStereo (oL.data(), oR.data(), B, level, st);
+                if (L) L->insert (L->end(), oL.begin(), oL.end());
+                if (R) R->insert (R->end(), oR.begin(), oR.end());
+                if (dive) dive->insert (dive->end(), rb.dive(), rb.dive() + B);
+                if (boom) boom->insert (boom->end(), rb.boom(), rb.boom() + B);
+                if (bands) for (int k = 0; k < Rainboom::kBands; ++k) (*bands)[(size_t) k].insert ((*bands)[(size_t) k].end(), rb.band (k), rb.band (k) + B);
+            }
+        };
+        auto tone = [] (int i) { return 0.25f * (float) std::sin (kTwoPi * 220.0 * i / SR); };
+        auto silence = [] (int) { return 0.0f; };
+        auto zcHz = [] (const std::vector<float>& x, double from, double to)
+        {
+            int zc = 0;
+            for (size_t i = (size_t) (from * SR); i + 1 < (size_t) (to * SR); ++i) if (x[i] <= 0 && x[i + 1] > 0) ++zc;
+            return zc / (to - from);
+        };
+        {
+            Rainboom rb; rb.prepare (SR, B);
+            std::vector<float> dive, boom;
+            render (rb, 1.2, tone, 1.0f, nullptr, nullptr, &dive, &boom, nullptr, 0.0, 0.7f);
+            {   // (under the rush of air: listen below 500 Hz)
+                juce::dsp::IIR::Filter<float> a1, a2;
+                *a1.coefficients = *juce::dsp::IIR::Coefficients<float>::makeLowPass (SR, 500.0f);
+                *a2.coefficients = *juce::dsp::IIR::Coefficients<float>::makeLowPass (SR, 500.0f);
+                for (auto& v : dive) v = a2.processSample (a1.processSample (v));
+            }
+            const double early = zcHz (dive, 0.15, 0.3), late = zcHz (dive, 0.58, 0.68);
+            const double semis = 12.0 * std::log2 (late / early);
+            check (semis > 2.5 && semis < 8.0, "the dive squeezes the sound up in pitch (Doppler)", juce::String (early, 0) + " Hz -> " + juce::String (late, 0) + " Hz, +" + juce::String (semis, 1) + " st");
+            size_t at = 0; double pk = 0;
+            for (size_t i = 0; i < boom.size(); ++i) if (std::abs (boom[i]) > pk) { pk = std::abs (boom[i]); at = i; }
+            const size_t b0 = (size_t) (0.7 * SR);
+            double first = 0, second = 0;
+            for (size_t i = b0; i < b0 + (size_t) (0.08 * SR); ++i) first += boom[i];
+            for (size_t i = b0 + (size_t) (0.08 * SR); i < b0 + (size_t) (0.16 * SR); ++i) second += boom[i];
+            check (std::abs ((double) at / SR - 0.7) < 0.01 && first > 0 && second < 0, "the boom lands when the dive ends, an N-wave (up, then down)",
+                   "peak at " + juce::String ((double) at / SR * 1000.0, 1) + " ms, halves " + juce::String (first / SR * 1000.0, 1) + " / " + juce::String (second / SR * 1000.0, 1));
+        }
+        {
+            Rainboom rb; rb.prepare (SR, B);
+            std::array<std::vector<float>, Rainboom::kBands> bands;
+            std::vector<float> L, R;
+            render (rb, 7.0, silence, 1.0f, &L, &R, nullptr, nullptr, &bands, 0.0, 0.0f);
+            // when each colour first comes up (its ping), from silence
+            juce::String times; bool inOrder = true; double last = -1;
+            for (int k = 0; k < Rainboom::kBands; ++k)
+            {
+                const auto& x = bands[(size_t) k];
+                double pk = 0; for (size_t i = 0; i < (size_t) (0.6 * SR); ++i) pk = std::max (pk, (double) std::abs (x[i]));
+                size_t t = 0; while (t < x.size() && std::abs (x[t]) < 0.3 * pk) ++t;
+                // (the boom itself sets the low colours ringing at once: time the ping, after the boom's first 10 ms)
+                size_t tp = (size_t) (0.01 * SR) + (size_t) (0.035 * SR * k);
+                double pkPing = 0; size_t atPing = 0;
+                for (size_t i = (size_t) (0.035 * SR * k); i < (size_t) (0.035 * SR * k + 0.03 * SR); ++i) if (std::abs (x[i]) > pkPing) { pkPing = std::abs (x[i]); atPing = i; }
+                juce::ignoreUnused (t, tp);
+                const double ms = (double) atPing / SR * 1000.0;
+                inOrder = inOrder && ms > last; last = ms;
+                times << juce::String (ms, 0) << (k < Rainboom::kBands - 1 ? " " : " ms");
+            }
+            check (inOrder, "the colours arrive red first, violet last", times);
+            // red (the lows) on the left, violet (the highs) on the right, once the ring has opened
+            auto bandEnergy = [&] (const std::vector<float>& x, float lo, float hi)
+            {
+                juce::dsp::IIR::Filter<float> f1, f2;
+                *f1.coefficients = *juce::dsp::IIR::Coefficients<float>::makeHighPass (SR, lo);
+                *f2.coefficients = *juce::dsp::IIR::Coefficients<float>::makeLowPass (SR, hi);
+                double e = 0;
+                for (size_t i = 0; i < x.size(); ++i) { const float y = f2.processSample (f1.processSample (x[i])); if (i > (size_t) (0.6 * SR) && i < (size_t) (2.0 * SR)) e += (double) y * y; }
+                return e;
+            };
+            const double redLR = 10.0 * std::log10 (bandEnergy (L, 80.0f, 160.0f) / bandEnergy (R, 80.0f, 160.0f));
+            const double vioLR = 10.0 * std::log10 (bandEnergy (L, 5000.0f, 10000.0f) / bandEnergy (R, 5000.0f, 10000.0f));
+            check (redLR > 3.0 && vioLR < -3.0, "red on the left, violet on the right", "red L/R " + juce::String (redLR, 1) + " dB, violet " + juce::String (vioLR, 1) + " dB");
+            auto rmsAt = [&] (double t) { double e = 0; for (size_t i = (size_t) (t * SR); i < (size_t) ((t + 0.2) * SR); ++i) e += (double) L[i] * L[i] + (double) R[i] * R[i]; return std::sqrt (e / (0.4 * SR)); };
+            const double d1 = db (rmsAt (2.5) / rmsAt (0.5)), d2 = db (rmsAt (5.2) / rmsAt (0.5));
+            check (d1 < -12.0 && d1 > -45.0 && d2 < d1 - 10.0, "the rainbow rings on and fades over its length (5 s)", juce::String (d1, 1) + " dB at 2.5 s, " + juce::String (d2, 1) + " dB at 5.2 s");
+            double pk = 0; for (size_t i = 0; i < L.size(); ++i) pk = std::max ({ pk, (double) std::abs (L[i]), (double) std::abs (R[i]) });
+            check (pk < 1.0, "from silence at full level: under 0 dBFS before the limiter", juce::String (db (pk), 1) + " dBFS peak");
+            std::vector<float> more;
+            render (rb, 6.0, silence, 1.0f, nullptr, nullptr, nullptr, nullptr, nullptr, 1e9);
+            check (! rb.active(), "then it goes to sleep (no CPU)");
+        }
+        {
+            // with sound coming through: how loud, and how much CPU
+            Rainboom rb; rb.prepare (SR, B);
+            std::vector<float> L, R;
+            auto loud = [] (int i) { return 0.25f * (float) std::sin (kTwoPi * 220.0 * i / SR) + 0.1f * (float) std::sin (kTwoPi * 1760.0 * i / SR); };
+            const auto t0 = std::chrono::steady_clock::now();
+            render (rb, 4.0, loud, 0.7f, &L, &R, nullptr, nullptr, nullptr, 0.2, 0.7f);
+            const double secs = std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
+            double pk = 0; for (size_t i = 0; i < L.size(); ++i) pk = std::max ({ pk, (double) std::abs (L[i]), (double) std::abs (R[i]) });
+            check (pk < 1.4, "over a -12 dBFS sound at the default level: peaks the limiter can hold", juce::String (db (pk), 1) + " dBFS");
+            check (secs / 4.0 < 0.05, "cheap", juce::String (secs / 4.0 * 100.0, 2) + " % of real time while ringing");
+            // a demo: the plucks, then a rainboom at 2 s
+            Rainboom rd; rd.prepare (SR, B);
+            std::vector<float> dL, dR;
+            auto pluck = [] (int n) { const double t = n / SR, ph = std::fmod (t, 0.5); return (float) (0.3 * std::exp (-ph * 6.0) * std::sin (kTwoPi * (220.0 + 110.0 * std::floor (std::fmod (t, 2.0) * 2.0)) * t)); };
+            render (rd, 10.0, pluck, 0.7f, &dL, &dR, nullptr, nullptr, nullptr, 1.3, 0.7f);
+            for (size_t i = 0; i < dL.size(); ++i) { const float d = pluck ((int) i); dL[i] = juce::jlimit (-1.0f, 1.0f, dL[i] + d); dR[i] = juce::jlimit (-1.0f, 1.0f, dR[i] + d); }
+            juce::File out = juce::File::getCurrentWorkingDirectory().getChildFile ("rainboom_demo.wav");
+            out.deleteFile();
+            juce::WavAudioFormat wav;
+            std::unique_ptr<juce::OutputStream> os (out.createOutputStream().release());
+            if (auto* w = wav.createWriterFor (os.get(), SR, 2, 24, {}, 0))
+            {
+                os.release();
+                std::unique_ptr<juce::AudioFormatWriter> writer (w);
+                const float* ch[2] = { dL.data(), dR.data() };
+                writer->writeFromFloatArrays (ch, 2, (int) dL.size());
+                std::printf ("7. wrote %s\n", out.getFullPathName().toRawUTF8());
+            }
         }
     }
 

@@ -158,6 +158,18 @@ private:
 // cloud, the snowflake, the heatwave sun and the auto switch.
 // They're drawn the way they always were, straight onto the sky, but on their own layer above the
 // balloons so a click always reaches them.
+// The sonic rainboom's pictures, over the whole room and the sphere: the streak diving in, the speed
+// cone, the flash, the seven rings opening out in 3-D round where it broke, and the rainbow left along
+// its path. Shown only while one is happening (or a balloon is being flung fast enough to make one).
+class RainboomLayer : public juce::Component
+{
+public:
+    explicit RainboomLayer (FreakiePieEditor& e) : ed (e) { setInterceptsMouseClicks (false, false); }
+    void paint (juce::Graphics&) override;
+private:
+    FreakiePieEditor& ed;
+};
+
 class WeatherBar : public juce::Component
 {
 public:
@@ -334,6 +346,11 @@ public:
     bool alive = true;
 
     juce::Point<float> pos, vel, dragTarget, grabOffset;   // pos, vel: where it is on screen (the projection of w)
+    juce::Point<float> flickVel;      // how fast it's being dragged (px/s), for a throw
+    double lastMoveT = 0.0;
+    juce::Point<float> lastMoveP;
+    bool flung() const noexcept;      // let go while moving fast enough to break the sound barrier
+    void maybeRainboom();             // (on letting go: a fast enough throw sets off a rainboom)
     float angle = 0.0f, squash = 0.0f, squashVel = 0.0f, stringLength = 260.0f, phase = 0.0f;
     float dance = 0.0f, lean = 0.0f, wet = 0.0f, stretch = 0.0f, frost = 0.0f;
     bool dragging = false;
@@ -394,6 +411,7 @@ public:
     bool isDrifting() const noexcept { return drifting; }
     juce::String currentText() const { return param.getCurrentValueAsText(); }
     juce::RangedAudioParameter& parameter() const noexcept { return param; }
+    void nudge (float amount);   // knocked by a shockwave: a continuous value moves by 'amount' (0..1 of its range)
 
 private:
     void setNorm (float n);
@@ -707,6 +725,31 @@ private:
     // the very top right corner, top to bottom: the pop sounds switch (right-click: feed them into the effects), help, reset
     juce::Rectangle<float> popsButton { 950.0f, 3.0f, 108.0f, 22.0f };
     juce::Rectangle<float> helpButton { 950.0f, 25.0f, 108.0f, 26.0f }, resetButton { 950.0f, 51.0f, 108.0f, 22.0f };
+
+    // the sonic rainboom: a little cloud under help and reset (click: one now; right-click: what sets
+    // them off, how loud, how long the rainbow lasts), and its pictures on their own layer
+    juce::Rectangle<float> rainboomButton { 944.0f, 80.0f, 110.0f, 62.0f };
+    std::unique_ptr<RainboomLayer> rainboomLayer;
+    struct BoomScene
+    {
+        fp::ambi::Vec3 at;                       // where it broke (fractions of the radius)
+        double diveStart = -100.0, diveLen = 0.7, boomTime = -100.0;
+        float tail = 5.0f;
+        bool hasDive = false;
+        std::vector<fp::ambi::Vec3> trail;       // the streak's path (fractions of the radius)
+    } boomScene;
+    int rbBoomsSeen = 0, rbDivesSeen = 0;
+    Floater* rbThrown = nullptr;
+    double rbThrownAt = -100.0;
+    Floater* rbCharging = nullptr;
+    float rbCharge = 0.0f;
+    void rainboomStep (float dt);
+    void drawRainboomButton (juce::Graphics&) const;
+    void openRainboomMenu();
+    void rainboomFromThrow (Floater&);
+    void shockwave (fp::ambi::Vec3 at);         // (fractions of the radius)
+    bool rainboomThrowsOn() const;
+    fp::ambi::Vec3 rbFlyer() const;             // the flyer now (fractions of the radius)
     float popsValue = 1.0f;
     std::unique_ptr<juce::ParameterAttachment> popsAtt;
     void drawPopsButton (juce::Graphics&) const;
@@ -740,6 +783,7 @@ private:
     friend class Library;
     friend class StoreShelves;
     friend class WeatherBar;
+    friend class RainboomLayer;
     friend class OrderRow;
     friend class PresetStrip;
     std::unique_ptr<PresetStrip> presetStrip;

@@ -60,6 +60,16 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::snow, 1 }, "Snow", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::heat, 1 }, "Heatwave", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::autoWeather, 1 }, "Auto Weather", false));
+    // the sonic rainboom
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbBoom, 1 }, "Rainboom", false));
+    layout.add (std::make_unique<F> (ParameterID { ids::rbLevel, 1 }, "Rainboom Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f,
+                                     A().withStringFromValueFunction (pct)));
+    layout.add (std::make_unique<F> (ParameterID { ids::rbTail, 1 }, "Rainbow Length", NormalisableRange<float> (1.0f, 12.0f, 0.0f, 0.6f), 5.0f,
+                                     A().withLabel ("s").withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " s"; })));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbHits, 1 }, "Rainboom On Hits", false));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbStorms, 1 }, "Rainboom After Storms", false));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbThrows, 1 }, "Rainboom On Throws", true));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbFast, 1 }, "Rainboom On Fast Grains", false));
     {
         // 5 s to 5 min; the middle of the range sits at 30 s so the short times are easy to set
         auto secs = [] (float v, int) { return snowFadeText (v); };
@@ -210,6 +220,8 @@ FreakiePieProcessor::FreakiePieProcessor()
     p_snow = get (ids::snow);
     p_snowIn = get (ids::snowIn); p_snowOut = get (ids::snowOut);
     p_heat = get (ids::heat); p_autoWeather = get (ids::autoWeather);
+    p_rbBoom = get (ids::rbBoom); p_rbLevel = get (ids::rbLevel); p_rbTail = get (ids::rbTail);
+    p_rbHits = get (ids::rbHits); p_rbStorms = get (ids::rbStorms); p_rbFast = get (ids::rbFast);
     p_stAmount = get (ids::stAmount); p_stBounce = get (ids::stBounce);
     p_stSway = get (ids::stSway);     p_stCutup = get (ids::stCutup);
     p_sgFreeze = get (ids::sgFreeze);
@@ -406,6 +418,14 @@ void FreakiePieProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     limiter.prepare (sampleRate);
     trixieNoise.prepare (sampleRate);
     stutter.prepare (sampleRate);
+    rainboom.prepare (sampleRate, samplesPerBlock);
+    rbHitsDetector.prepare (sampleRate);
+    rbDiveDist.prepare (sampleRate, samplesPerBlock);
+    rbBoomDist.prepare (sampleRate, samplesPerBlock);
+    rbMono.assign ((size_t) jmax (1, samplesPerBlock), 0.0f);
+    rbTmp.assign ((size_t) jmax (1, samplesPerBlock), 0.0f);
+    for (auto& c : rbRingWas) c.fill (0.0f);
+    rbButtonWas = p_rbBoom->load() > 0.5f; rbRainWas = p_rain->load() > 0.5f; rbRequestsSeen = rbRequests.load(); rbPrevValid = false;
     granulator.prepare (sampleRate, nb);
     srcDist.prepare (sampleRate, nb);
     popsDist.prepare (sampleRate, nb);
@@ -883,6 +903,8 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         popsDist.process (mono, n, src, sphereMetres, busW, sendW, 0.5f);
     }
 
+    rainboomBlock (inL, inR, busW, sendW, n, sphereMetres, count, seconds);   // (before the reverb, so it can ring in the sphere too)
+
     // the one reverb, for the whole sphere (the lilac balloons)
     {
         const float target = (1.0f - (p_fxBypass->load() > 0.5f ? 1.0f : 0.0f)) * jlimit (0.0f, 1.0f, p_rvMix->load());
@@ -1004,6 +1026,134 @@ fp::EngineParams FreakiePieProcessor::grainParams (const fp::EngineParams& b, co
 }
 
 
+// The rainboom, in the sphere. What sets one off (the switch, the editor, a hit, the rain stopping, a
+// grain flying fast), then:
+//   * the dive: the flyer comes in from outside the glass to where it breaks (a moving point, through
+//     the same distance model as everything else, so it Doppler-shifts on the way in too),
+//   * the boom: a point where it breaks,
+//   * the rainbow: seven rings, one per colour, opening out flat round where it broke (red outermost,
+//     the first to reach you); each ring is a dozen points summed into one set of 16 gains per block,
+//     so a ring off to one side sounds like an arc there, and one passing over you surrounds you.
+void FreakiePieProcessor::rainboomBlock (const float* inL, const float* inR, float* const* busW, float* const* sendW, int n,
+                                         float sphereMetres, int count, float seconds)
+{
+    using fp::ambi::Vec3;
+    if ((int) rbMono.size() < n) { rbMono.resize ((size_t) n); rbTmp.resize ((size_t) n); }
+    float dive = -1.0f;
+    bool follow = false;
+    int followGrain = -1;
+    const bool button = p_rbBoom->load() > 0.5f;
+    if (button && ! rbButtonWas) dive = 0.7f;
+    rbButtonWas = button;
+    if (const int r = rbRequests.load(); r != rbRequestsSeen) { rbRequestsSeen = r; dive = jlimit (0.0f, 3.0f, rbRequestDive.load()); follow = rbRequestFollow.load(); }
+    const bool rainNow = p_rain->load() > 0.5f;
+    if (rbRainWas && ! rainNow && p_rbStorms->load() > 0.5f) dive = 0.9f;
+    rbRainWas = rainNow;
+    const bool hit = rbHitsDetector.process (inL, inR, n, 1.5f);
+    if (hit && p_rbHits->load() > 0.5f && dive < 0.0f && rainboom.secondsSinceBoom() > 1.5) dive = 0.0f;
+    // a grain flying faster than 30 m/s breaks it where it is (at most every 4 s)
+    rbFastWait = jmax (0.0f, rbFastWait - seconds);
+    {
+        float fastest = 0.0f;
+        for (int v = 0; v < jmin (count, (int) rbPrev.size()); ++v)
+        {
+            const auto pos = flightPaths.position (v);
+            const float jump = (pos - rbPrev[(size_t) v]).length();
+            const float sp = rbPrevValid && jump < 0.3f ? jump * sphereMetres / jmax (1.0e-4f, seconds) : 0.0f;   // (a jump is a grain put somewhere, not flying)
+            if (sp > fastest && p_rbFast->load() > 0.5f && rbFastWait <= 0.0f && ! rainboom.diving() && dive < 0.0f && sp > 30.0f)
+            { fastest = sp; followGrain = v; }
+            rbPrev[(size_t) v] = pos;
+        }
+        if (followGrain >= 0) { dive = 0.5f; rbFastWait = 4.0f; }
+        rbPrevValid = true;
+    }
+    if (dive >= 0.0f && rainboom.fire (dive))
+    {
+        rbFollowGrain = followGrain;
+        rbFollowTarget = follow;
+        auto randomPlace = [this]
+        {
+            const float az = rbRnd.nextFloat() * MathConstants<float>::twoPi, el = (rbRnd.nextFloat() - 0.3f) * 0.9f;
+            return fp::ambi::fromAzEl (az, el) * (0.3f + 0.45f * rbRnd.nextFloat());
+        };
+        if (followGrain >= 0) rbAt = flightPaths.position (followGrain);
+        else if (follow) rbAt = { rbTargetX.load(), rbTargetY.load(), rbTargetZ.load() };
+        else rbAt = randomPlace();
+        // it comes in from outside the glass, from above and to one side
+        const float az = rbRnd.nextFloat() * MathConstants<float>::twoPi;
+        rbFrom = fp::ambi::fromAzEl (az, 0.5f) * 1.7f;
+        if (follow || followGrain >= 0) rbFrom = rbAt + (rbAt - rbFrom).normalised() * -0.9f;
+        rbNow = rbFrom;
+        rbDiveDist.reset();
+    }
+    if (rainboom.diving())
+    {
+        if (rbFollowGrain >= 0) rbAt = flightPaths.position (rbFollowGrain);
+        else if (rbFollowTarget) rbAt = { rbTargetX.load(), rbTargetY.load(), rbTargetZ.load() };
+        const float u = rainboom.diveProgress();
+        rbNow = rbFrom + (rbAt - rbFrom) * (u * u);
+    }
+
+    // what it colours: everything the sphere is playing (its W)
+    float* m = rbMono.data();
+    for (int i = 0; i < n; ++i) m[i] = busW[0][i];
+    fp::Rainboom::Settings rs;
+    rs.tailSeconds = p_rbTail->load();
+    const int boomsBefore = rainboom.numBooms();
+    rainboom.process (m, n, rs);
+    if (rainboom.numBooms() != boomsBefore) rbBoomDist.reset();
+    rbAtX.store (rbAt.x); rbAtY.store (rbAt.y); rbAtZ.store (rbAt.z);
+    rbNowX.store (rbNow.x); rbNowY.store (rbNow.y); rbNowZ.store (rbNow.z);
+    rbFromX.store (rbFrom.x); rbFromY.store (rbFrom.y); rbFromZ.store (rbFrom.z);
+    rainboomBooms.store (rainboom.numBooms());
+    rainboomDives.store (rainboom.numDives());
+    rainboomDiveLeft.store (rainboom.diveSecondsLeft());
+    if (! rainboom.active()) return;
+    const float level = p_rbLevel->load();
+    if (level <= 0.0f) return;
+
+    rbDiveDist.doppler = rbBoomDist.doppler = p_doppler->load() > 0.5f;   // (the Doppler switch: the dive's own squeeze stays either way)
+    float* t = rbTmp.data();
+    for (int i = 0; i < n; ++i) t[i] = level * rainboom.dive()[i];
+    rbDiveDist.process (t, n, rbNow, sphereMetres, busW, sendW, 0.4f);
+    for (int i = 0; i < n; ++i) t[i] = level * rainboom.boom()[i];
+    rbBoomDist.process (t, n, rbAt, sphereMetres, busW, sendW, 0.6f);
+
+    // the rings
+    const double since = rainboom.secondsSinceBoom();
+    const float inv = 1.0f / (float) n;
+    for (int k = 0; k < fp::Rainboom::kBands; ++k)
+    {
+        const float r = ringRadius (since - rbGap * (double) k);
+        fp::ambi::Coefs c {};
+        constexpr int N = 12;
+        for (int j = 0; j < N; ++j)
+        {
+            const float a = (float) j / (float) N * MathConstants<float>::twoPi;
+            const Vec3 q = rbAt + Vec3 { std::cos (a), std::sin (a), 0.0f } * r;
+            const float d = q.length();
+            const float g = jmin (1.0f, 0.6f / jmax (0.05f, d)) / (float) N;
+            const auto e = d <= 1.0f ? fp::ambi::encodeNear (q) : fp::ambi::sh (q.normalised());
+            for (int ch = 0; ch < fp::ambi::kCh; ++ch) c[(size_t) ch] += g * e[(size_t) ch];
+        }
+        const float* y = rainboom.band (k);
+        auto& was = rbRingWas[(size_t) k];
+        for (int ch = 0; ch < fp::ambi::kCh; ++ch)
+        {
+            const float c0 = was[(size_t) ch], dc = (c[(size_t) ch] - c0) * inv;
+            float* o = busW[ch];
+            float* sd = sendW[ch];
+            for (int i = 0; i < n; ++i)
+            {
+                const float v = level * (c0 + dc * (float) (i + 1)) * y[i];
+                o[i] += v;
+                sd[i] += 0.3f * v;
+            }
+        }
+        was = c;
+    }
+}
+
 AudioProcessorEditor* FreakiePieProcessor::createEditor() { return new FreakiePieEditor (*this); }
 
 void FreakiePieProcessor::getStateInformation (MemoryBlock& destData)
@@ -1095,7 +1245,7 @@ void FreakiePieProcessor::resetToNormal()
 
 bool FreakiePieProcessor::trixieMayTouch (const String& id)
 {
-    for (auto* no : { ids::grains, ids::grainMode, ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::heat, ids::heatIn, ids::heatOut, ids::autoWeather, ids::balloonSfx, ids::popsThru, ids::grainsLevel, ids::catchFrom })
+    for (auto* no : { ids::rbBoom, ids::rbHits, ids::rbStorms, ids::rbThrows, ids::rbFast, ids::grains, ids::grainMode, ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::heat, ids::heatIn, ids::heatOut, ids::autoWeather, ids::balloonSfx, ids::popsThru, ids::grainsLevel, ids::catchFrom })
         if (id == no) return false;
     return ! id.endsWith ("Owned");
 }

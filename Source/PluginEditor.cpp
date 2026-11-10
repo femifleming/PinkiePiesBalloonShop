@@ -329,6 +329,9 @@ void Floater::beginMove (const MouseEvent& e)
     dragging = true;
     grabOffset = pos - downPos;
     dragTarget = pos;
+    flickVel = {};
+    lastMoveT = Time::getMillisecondCounterHiRes() * 0.001;
+    lastMoveP = downPos;
     toFront (false);
 }
 
@@ -337,6 +340,22 @@ void Floater::dragMove (const MouseEvent& e)
     const auto p = owner.toContent (e);
     if (p.getDistanceFrom (downPos) > 3.0f) moved = true;
     dragTarget = p + grabOffset;
+    const double now = Time::getMillisecondCounterHiRes() * 0.001;
+    const double dt = now - lastMoveT;
+    if (dt > 0.002 && dt < 0.2) flickVel = flickVel * 0.4f + ((p - lastMoveP) / (float) dt) * 0.6f;
+    else if (dt >= 0.2) flickVel = {};
+    if (dt > 0.002) { lastMoveT = now; lastMoveP = p; }
+}
+
+void Floater::maybeRainboom()
+{
+    if (moved && flung() && owner.rainboomThrowsOn()) owner.rainboomFromThrow (*this);
+}
+
+// let go while still moving fast (a flick, not a stop and then a release)
+bool Floater::flung() const noexcept
+{
+    return Time::getMillisecondCounterHiRes() * 0.001 - lastMoveT < 0.07 && flickVel.getDistanceFromOrigin() > 2200.0f;
 }
 
 void Floater::applySquashAndStretch (Graphics& g, const BalloonShape& sh) const
@@ -445,6 +464,7 @@ void Balloon::mouseUp (const MouseEvent&)
     else if (mode == Mode::move)
     {
         dragging = false;
+        maybeRainboom();
         if (! moved)
         {
             if (isToggle)
@@ -790,6 +810,9 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
     addChildComponent (*library);
     storeShelves = std::make_unique<StoreShelves> (*this);
     overlay.addChildComponent (*storeShelves);
+    rainboomLayer = std::make_unique<RainboomLayer> (*this);
+    rainboomLayer->setBounds (0, 0, designW, designH);
+    content.addChildComponent (*rainboomLayer);
     weatherBar = std::make_unique<WeatherBar> (*this);
     content.addAndMakeVisible (*weatherBar);
     orderRow = std::make_unique<OrderRow> (*this);
@@ -2045,6 +2068,14 @@ namespace
           "Snow and a heatwave never come together: turning one on sends the other away.\n\n"
           "A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.\n\n"
           "With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there." },
+        { "Sonic rainboom",
+          "The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and something dives in from the sky, faster and faster, until it breaks the sound barrier: a boom and a rainbow at the same moment.\n\n"
+          "On the way in your sound is squeezed up in pitch, the way a sound rushing towards you would be, with a rush of air under it. The boom has the real shape of a sonic boom, a double crack. "
+          "Then the rainbow: your sound split into seven colours, red the lowest and violet the highest. They arrive one after another, so they sweep up from the lows to the highs, and each one keeps ringing for the rainbow's length while the rainbow fades from the sky.\n\n"
+          "The shockwave knocks the balloons back, and the ones nearest it are nudged to new values.\n\n"
+          "Fling a balloon hard enough and it breaks the barrier itself: a white cone grows behind it as you get close. Right-click the cloud for what else sets one off, such as a hit in your sound or the rain stopping after a storm. "
+          "The same menu sets how loud it is and how long the rainbow lasts."
+          "\n\nIn stereo the colours fan out as the ring opens, red to the left and violet to the right." },
         { "The balloon store",
           "Click the balloon store sign at the top to open the store. Pick an effect and a little gift box drops out of the shop with four balloons tied to it: its two controls, then its level and its width. "
           "The box takes a place among the other effects, and the order list moves it about like the rest. Width spreads the effect from mono in the middle to wide stereo.\n\n"
@@ -2904,6 +2935,11 @@ void FreakiePieEditor::contentMouse (const MouseEvent& e, int phase)
             }
         if (helpButton.contains (p) && library != nullptr) { library->open(); library->grabKeyboardFocus(); }
         else if (resetButton.contains (p)) resetEverything();
+        else if (rainboomButton.contains (p))
+        {
+            if (e.mods.isPopupMenu()) openRainboomMenu();
+            else { proc.requestRainboom (0.7f); confetti (rainboomButton.getCentre(), 10); }
+        }
         else if (popsButton.contains (p) && popsAtt != nullptr)
         {
             if (e.mods.isPopupMenu()) openPopsMenu();
@@ -3501,6 +3537,7 @@ void FreakiePieEditor::timerCallback()
 
     weatherStep (dt);
     cloudStep (dt);
+    rainboomStep (dt);
     snowStep (dt);
     trixieStep (dt);
     pumpStep (dt);
@@ -4446,6 +4483,7 @@ void FreakiePieEditor::paintContent (Graphics& g)
     drawStoreSign (g);
     drawHelpButton (g);
     drawResetButton (g);
+    drawRainboomButton (g);
     drawPopsButton (g);
 
     // (the weather switches are drawn by the weather row, on its own layer above the balloons)
@@ -5479,4 +5517,364 @@ void FreakiePieEditor::drawRainButton (Graphics& g) const
     g.setFont (SadLookAndFeel::uiFont (10.5f, true));
     g.setColour (palette::blush.withAlpha (rainOn() ? 0.95f : 0.6f));
     g.drawText (rainOn() ? "rain: on" : "rain", cloudButton.withTop (cloudButton.getBottom() - 14.0f), Justification::centred);
+}
+
+//==============================================================================
+// The sonic rainboom
+//==============================================================================
+namespace
+{
+    // the rainbow, outside (red) to inside (violet)
+    const Colour rainbowColours[7] = { Colour (0xffff3b47), Colour (0xffff9a1f), Colour (0xffffe03a), Colour (0xff3fd16b),
+                                       Colour (0xff2f9bff), Colour (0xff5b5cf0), Colour (0xffc05cf5) };
+    Point<float> bezier (Point<float> a, Point<float> c, Point<float> b, float u)
+    {
+        const float v = 1.0f - u;
+        return a * (v * v) + c * (2.0f * v * u) + b * (u * u);
+    }
+}
+
+void Balloon::nudge (float amount)
+{
+    if (isToggle || isChoice || isStepped || dragging || ! alive) return;
+    attachment.setValueAsCompleteGesture (param.convertFrom0to1 (jlimit (0.0f, 1.0f, param.convertTo0to1 (value) + amount)));
+}
+
+bool FreakiePieEditor::rainboomThrowsOn() const
+{
+    auto* p = proc.apvts.getRawParameterValue (ids::rbThrows);
+    return p != nullptr && p->load() > 0.5f;
+}
+
+// a balloon flung hard enough: it carries on along its throw, and breaks the sound barrier a moment later
+void FreakiePieEditor::rainboomFromThrow (Floater& f)
+{
+    rbThrown = &f;
+    rbThrownAt = clock;
+    f.vel = f.flickVel * 0.55f;
+    proc.requestRainboom (0.35f);
+}
+
+Point<float> FreakiePieEditor::boomHead() const
+{
+    const auto& b = boomScene;
+    if (rbThrown != nullptr && clock - rbThrownAt < b.diveLen + 0.5) return rbThrown->pos;
+    const float u = jlimit (0.0f, 1.0f, (float) ((clock - b.diveStart) / jmax (0.05, b.diveLen)));
+    const Point<float> ctrl ((b.from.x + b.at.x) * 0.5f, b.at.y + 40.0f);
+    return bezier (b.from, ctrl, b.at, u * u);   // faster and faster
+}
+
+void FreakiePieEditor::rainboomStep (float)
+{
+    auto& b = boomScene;
+    const int dives = proc.rainboomDives.load(), booms = proc.rainboomBooms.load();
+    const bool thrownNow = rbThrown != nullptr && clock - rbThrownAt < 0.4;
+    if (dives != rbDivesSeen)
+    {
+        rbDivesSeen = dives;
+        b.hasDive = true;
+        b.diveStart = clock;
+        b.diveLen = jmax (0.1f, proc.rainboomDiveLeft.load());
+        b.trail.clear();
+        if (thrownNow) { b.from = rbThrown->pos; b.at = rbThrown->pos + rbThrown->vel * (float) b.diveLen; }
+        else
+        {
+            b.at = { 330.0f + 420.0f * rnd.nextFloat(), 120.0f + 140.0f * rnd.nextFloat() };
+            b.from = { b.at.x < (float) designW * 0.5f ? -90.0f : (float) designW + 90.0f, -70.0f };
+        }
+    }
+    if (booms != rbBoomsSeen)
+    {
+        const bool dived = clock - b.diveStart < b.diveLen + 0.3;
+        rbBoomsSeen = booms;
+        if (dived) b.at = boomHead();
+        else
+        {
+            // (a hit in the sound: no dive, just the boom, somewhere in the sky)
+            b.hasDive = false;
+            b.trail.clear();
+            b.at = { 330.0f + 420.0f * rnd.nextFloat(), 120.0f + 140.0f * rnd.nextFloat() };
+        }
+        b.boomTime = clock;
+        if (auto* t = proc.apvts.getRawParameterValue (ids::rbTail)) b.tail = t->load();
+        shockwave (b.at);
+    }
+    // the streak's path, for the rainbow it leaves
+    const bool diving = clock - b.diveStart < b.diveLen;
+    if (diving && b.hasDive)
+    {
+        const auto h = boomHead();
+        if (b.trail.empty() || b.trail.back().getDistanceFrom (h) > 6.0f) b.trail.push_back (h);
+    }
+    // a balloon being dragged fast: its cone grows towards the barrier
+    rbCharging = nullptr; rbCharge = 0.0f;
+    if (rainboomThrowsOn())
+        for (auto* f : floaters)
+            if (f->dragging && Time::getMillisecondCounterHiRes() * 0.001 - f->lastMoveT < 0.07)
+            {
+                const float c = f->flickVel.getDistanceFromOrigin() / 2200.0f;
+                if (c > 0.45f && c > rbCharge) { rbCharge = jmin (1.0f, c); rbCharging = f; }
+            }
+    const bool show = diving || clock - b.boomTime < (double) b.tail + 2.0 || rbCharging != nullptr;
+    if (show != rainboomLayer->isVisible()) rainboomLayer->setVisible (show);
+    if (show)
+    {
+        rainboomLayer->toFront (false);
+        rainboomLayer->repaint();
+    }
+}
+
+// the shockwave: every balloon knocked outward (more the nearer it is), and the near ones nudged to new values
+void FreakiePieEditor::shockwave (Point<float> at)
+{
+    for (auto* f : floaters)
+    {
+        if (! f->alive) continue;
+        const auto d = f->pos - at;
+        const float dist = d.getDistanceFromOrigin();
+        const float k = jmax (0.0f, 1.0f - dist / 700.0f);
+        if (k <= 0.0f) continue;
+        const auto dir = dist > 1.0f ? d / dist : Point<float> (0.0f, -1.0f);
+        f->vel += dir * (900.0f * k);
+        f->squashVel += 5.0f * k;
+        if (auto* bl = dynamic_cast<Balloon*> (f))
+            if (dist < 420.0f && FreakiePieProcessor::trixieMayTouch (bl->parameter().getParameterID()))
+                bl->nudge ((rnd.nextFloat() - 0.5f) * 0.3f * (1.0f - dist / 420.0f));
+    }
+    pinkieHopVel = jmax (pinkieHopVel, 260.0f);
+    noteActivity();
+}
+
+void RainboomLayer::paint (Graphics& g)
+{
+    const auto& b = ed.boomScene;
+    const double now = ed.clock;
+    const float W = (float) FreakiePieEditor::designW, H = (float) FreakiePieEditor::designH;
+
+    // a balloon flung fast: a white cone behind it, growing as it nears the barrier
+    if (ed.rbCharging != nullptr)
+    {
+        const auto p = ed.rbCharging->pos;
+        const auto v = ed.rbCharging->flickVel;
+        const float sp = jmax (1.0f, v.getDistanceFromOrigin());
+        const auto back = -v / sp, side = Point<float> (-back.y, back.x);
+        const float len = 40.0f + 110.0f * ed.rbCharge, wide = 34.0f * (1.2f - ed.rbCharge);
+        Path cone;
+        cone.startNewSubPath (p + back * 10.0f);
+        cone.lineTo (p + back * len + side * wide);
+        cone.lineTo (p + back * len - side * wide);
+        cone.closeSubPath();
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.75f * ed.rbCharge), p, Colours::white.withAlpha (0.0f), p + back * len, false));
+        g.fillPath (cone);
+    }
+
+    // the dive: speed lines, then the streak with its rainbow tail and, near the end, the cone
+    const float u = (float) ((now - b.diveStart) / jmax (0.05, b.diveLen));
+    const bool thrown = ed.rbThrown != nullptr && now - ed.rbThrownAt < b.diveLen + 0.5;
+    if (b.hasDive && u >= 0.0f && u < 1.0f)
+    {
+        const auto head = ed.boomHead();
+        Point<float> dir = b.at - b.from;
+        if (b.trail.size() > 1) dir = b.trail.back() - b.trail[b.trail.size() - 2];
+        const float dl = jmax (1.0f, dir.getDistanceFromOrigin());
+        dir /= dl;
+        Random r (7);
+        for (int i = 0; i < 18; ++i)   // speed lines across the sky, along the dive
+        {
+            const Point<float> c (r.nextFloat() * W, r.nextFloat() * H);
+            const float shift = std::fmod ((float) now * 1400.0f + 300.0f * (float) i, 1600.0f) - 800.0f;
+            const auto a = c + dir * shift, e = a + dir * (60.0f + 120.0f * u);
+            g.setColour (Colours::white.withAlpha (0.12f + 0.3f * u * u));
+            g.drawLine ({ a, e }, 1.4f);
+        }
+        if (b.trail.size() > 1)
+        {
+            Path tr;
+            tr.startNewSubPath (b.trail.front());
+            for (size_t i = 1; i < b.trail.size(); ++i) tr.lineTo (b.trail[i]);
+            tr.lineTo (head);
+            for (int k = 0; k < 7; ++k)
+            {
+                const float off = ((float) k - 3.0f) * 4.0f;
+                g.setColour (rainbowColours[k].withAlpha (0.85f));
+                g.strokePath (tr, PathStrokeType (4.5f, PathStrokeType::curved, PathStrokeType::rounded), AffineTransform::translation (-dir.y * off, dir.x * off));
+            }
+        }
+        if (u > 0.55f)   // the sound barrier: a white cone forming round the nose
+        {
+            const float c = (u - 0.55f) / 0.45f;
+            const auto side = Point<float> (-dir.y, dir.x);
+            Path cone;
+            cone.startNewSubPath (head + dir * 14.0f);
+            cone.lineTo (head - dir * (50.0f + 60.0f * c) + side * (46.0f - 20.0f * c));
+            cone.lineTo (head - dir * (50.0f + 60.0f * c) - side * (46.0f - 20.0f * c));
+            cone.closeSubPath();
+            g.setColour (Colours::white.withAlpha (0.55f * c));
+            g.fillPath (cone);
+        }
+        if (! thrown)   // the flyer: a blue blur with a white glow (a flung balloon is its own)
+        {
+            g.setColour (Colours::white.withAlpha (0.5f));
+            g.fillEllipse (Rectangle<float> (26.0f, 26.0f).withCentre (head));
+            g.setColour (Colour (0xff6fc6ff));
+            g.fillEllipse (Rectangle<float> (15.0f, 15.0f).withCentre (head));
+        }
+    }
+
+    // the boom
+    const float t = (float) (now - b.boomTime);
+    if (t >= 0.0f && t < b.tail + 2.0f)
+    {
+        // the rainbow left in the sky along the streak's path, fading over the rainbow's length
+        if (b.trail.size() > 1)
+        {
+            const float a = 0.75f * (1.0f - fp::smoothstep (t / (b.tail + 1.0f)));
+            Path tr;
+            tr.startNewSubPath (b.trail.front());
+            for (size_t i = 1; i < b.trail.size(); ++i) tr.lineTo (b.trail[i]);
+            tr.lineTo (b.at);
+            auto dir = b.at - b.trail[b.trail.size() > 3 ? b.trail.size() - 3 : 0];
+            dir /= jmax (1.0f, dir.getDistanceFromOrigin());
+            const float wide = 5.0f + 5.0f * fp::smoothstep (t / 1.5f);
+            for (int k = 0; k < 7; ++k)
+            {
+                const float off = ((float) k - 3.0f) * wide;
+                g.setColour (rainbowColours[k].withAlpha (a));
+                g.strokePath (tr, PathStrokeType (wide + 0.8f, PathStrokeType::curved, PathStrokeType::butt), AffineTransform::translation (-dir.y * off, dir.x * off));
+            }
+            Random r (11);   // a few sparkles along it
+            for (int i = 0; i < 14; ++i)
+            {
+                const auto q = b.trail[(size_t) r.nextInt ((int) b.trail.size())] + Point<float> (r.nextFloat() * 30.0f - 15.0f, r.nextFloat() * 30.0f - 15.0f);
+                const float tw = 0.5f + 0.5f * std::sin ((float) now * 6.0f + (float) i * 1.7f);
+                Path st;
+                st.addStar (q, 4, 1.0f, 3.0f + 4.0f * tw);
+                g.setColour (Colours::white.withAlpha (a * tw));
+                g.fillPath (st);
+            }
+        }
+        // the flash
+        if (t < 0.4f)
+        {
+            g.setColour (Colours::white.withAlpha (0.6f * std::exp (-t / 0.1f)));
+            g.fillAll();
+        }
+        // the ring: seven bands, red outside, opening out fast and flat (seen from the side), with cloudy puffs on its rim
+        if (t < 2.2f)
+        {
+            const float R = 30.0f + 1150.0f * (1.0f - std::exp (-t / 0.55f));
+            const float alpha = 1.0f - fp::smoothstep (t / 2.2f);
+            const float aspect = 0.42f, bw = 7.0f + 10.0f * fp::smoothstep (t / 0.8f);
+            for (int k = 0; k < 7; ++k)
+            {
+                const float rr = jmax (2.0f, R - (float) k * bw);
+                g.setColour (rainbowColours[k].withAlpha (0.85f * alpha));
+                g.drawEllipse (Rectangle<float> (2.0f * rr, 2.0f * rr * aspect).withCentre (b.at), bw + 0.8f);
+            }
+            for (int i = 0; i < 30; ++i)   // the puffs
+            {
+                const float a = (float) i / 30.0f * MathConstants<float>::twoPi;
+                const auto q = b.at + Point<float> (std::cos (a) * (R + bw * 0.3f), std::sin (a) * (R + bw * 0.3f) * aspect);
+                const float pr = bw * (1.0f + 0.4f * std::sin ((float) i * 2.3f));
+                g.setColour (Colours::white.withAlpha (0.4f * alpha));
+                g.fillEllipse (Rectangle<float> (2.0f * pr, 1.6f * pr).withCentre (q));
+            }
+            // the shock itself: white ripples inside the ring
+            for (int j = 1; j <= 3; ++j)
+            {
+                const float rr = R * (0.25f * (float) j);
+                g.setColour (Colours::white.withAlpha (0.35f * alpha));
+                g.drawEllipse (Rectangle<float> (2.0f * rr, 2.0f * rr * aspect).withCentre (b.at), 1.6f);
+            }
+        }
+    }
+}
+
+// the button: Rainbow Dash's cloud, with a rainbow looping out of it
+void FreakiePieEditor::drawRainboomButton (Graphics& g) const
+{
+    const auto r = rainboomButton;
+    const auto c = r.getCentre().translated (0.0f, -8.0f);
+    const float t = (float) clock;
+    const bool hover = r.contains (content.getMouseXYRelative().toFloat());
+    // the rainbow: an arc out of the cloud, its end chasing round
+    const float sweep = 1.2f + 0.5f * std::sin (t * 1.3f);
+    for (int k = 0; k < 7; ++k)
+    {
+        Path arc;
+        const float rr = 26.0f - (float) k * 2.6f;
+        arc.addCentredArc (c.x + 4.0f, c.y + 6.0f, rr, rr, 0.0f, -sweep, sweep * 0.2f, true);
+        g.setColour (rainbowColours[k].withAlpha (hover ? 1.0f : 0.85f));
+        g.strokePath (arc, PathStrokeType (2.8f));
+    }
+    drawCloud (g, c.translated (-8.0f, 8.0f), 0.36f, 0.0f);
+    auto label = String ("rainboom");
+    StringArray how;
+    auto on = [this] (const char* id) { auto* v = proc.apvts.getRawParameterValue (id); return v != nullptr && v->load() > 0.5f; };
+    if (on (ids::rbHits)) how.add ("hits");
+    if (on (ids::rbStorms)) how.add ("storms");
+    if (how.size() > 0) label << ": " << how.joinIntoString (", ");
+    g.setFont (SadLookAndFeel::uiFont (9.5f, true));
+    g.setColour (palette::blush.withAlpha (hover ? 0.95f : 0.75f));
+    g.drawText (label, r.withTop (r.getBottom() - 14.0f).expanded (10.0f, 0.0f), Justification::centred);
+}
+
+// right-click the rainboom: what sets one off, how loud, how long the rainbow rings on
+void FreakiePieEditor::openRainboomMenu()
+{
+    auto prm = [this] (const char* id) { return proc.apvts.getParameter (id); };
+    PopupMenu m;
+    m.setLookAndFeel (&storeLook);
+    storeLook.time = (float) clock;
+    m.addSectionHeader ("Sonic rainboom");
+    PopupMenu::Item now ("rainboom now");
+    now.itemID = 1; now.colour = rainbowColours[0]; now.shortcutKeyDescription = "a dive, then the boom";
+    m.addItem (now);
+    struct Sw { int id; const char* param; const char* name; const char* what; };
+    const Sw sws[] = { { 2, ids::rbThrows, "on throws", "fling a balloon hard" },
+                       { 3, ids::rbHits, "on hits", "a hit in your sound" },
+                       { 4, ids::rbStorms, "after storms", "when the rain stops" } };
+    for (int i = 0; i < 3; ++i)
+    {
+        PopupMenu::Item it (sws[i].name);
+        it.itemID = sws[i].id; it.isTicked = prm (sws[i].param)->getValue() > 0.5f; it.colour = rainbowColours[2 + i];
+        it.shortcutKeyDescription = sws[i].what;
+        m.addItem (it);
+    }
+    PopupMenu level, length;
+    const float lv = prm (ids::rbLevel)->convertFrom0to1 (prm (ids::rbLevel)->getValue());
+    for (int i = 0; i < 4; ++i)
+    {
+        const float v[] = { 0.25f, 0.5f, 0.7f, 1.0f };
+        level.addItem (10 + i, String (roundToInt (v[i] * 100.0f)) + " %", true, std::abs (lv - v[i]) < 0.02f);
+    }
+    const float tl = prm (ids::rbTail)->convertFrom0to1 (prm (ids::rbTail)->getValue());
+    for (int i = 0; i < 4; ++i)
+    {
+        const float v[] = { 2.0f, 5.0f, 8.0f, 12.0f };
+        length.addItem (20 + i, String (roundToInt (v[i])) + " s", true, std::abs (tl - v[i]) < 0.05f);
+    }
+    m.addSubMenu ("level", level);
+    m.addSubMenu ("rainbow length", length);
+    const auto screen = content.localAreaToGlobal (rainboomButton.getSmallestIntegerContainer());
+    m.showMenuAsync (PopupMenu::Options().withTargetScreenArea (screen).withMinimumWidth (300).withParentComponent (this),
+                     [safe = Component::SafePointer<FreakiePieEditor> (this)] (int r)
+                     {
+                         if (safe == nullptr || r <= 0) return;
+                         auto& ap = safe->proc.apvts;
+                         auto setReal = [&ap] (const char* id, float v)
+                         {
+                             auto* p = ap.getParameter (id);
+                             p->beginChangeGesture(); p->setValueNotifyingHost (p->convertTo0to1 (v)); p->endChangeGesture();
+                         };
+                         if (r == 1) safe->proc.requestRainboom (0.7f);
+                         else if (r >= 2 && r <= 4)
+                         {
+                             const char* id = r == 2 ? ids::rbThrows : r == 3 ? ids::rbHits : ids::rbStorms;
+                             setReal (id, ap.getParameter (id)->getValue() > 0.5f ? 0.0f : 1.0f);
+                         }
+                         else if (r >= 10 && r < 14) { const float v[] = { 0.25f, 0.5f, 0.7f, 1.0f }; setReal (ids::rbLevel, v[r - 10]); }
+                         else if (r >= 20 && r < 24) { const float v[] = { 2.0f, 5.0f, 8.0f, 12.0f }; setReal (ids::rbTail, v[r - 20]); }
+                         safe->confetti (safe->rainboomButton.getCentre(), 8);
+                     });
 }

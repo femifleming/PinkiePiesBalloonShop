@@ -60,6 +60,15 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::snow, 1 }, "Snow", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::heat, 1 }, "Heatwave", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::autoWeather, 1 }, "Auto Weather", false));
+    // the sonic rainboom
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbBoom, 1 }, "Rainboom", false));
+    layout.add (std::make_unique<F> (ParameterID { ids::rbLevel, 1 }, "Rainboom Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f,
+                                     A().withStringFromValueFunction (pct)));
+    layout.add (std::make_unique<F> (ParameterID { ids::rbTail, 1 }, "Rainbow Length", NormalisableRange<float> (1.0f, 12.0f, 0.0f, 0.6f), 5.0f,
+                                     A().withLabel ("s").withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " s"; })));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbHits, 1 }, "Rainboom On Hits", false));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbStorms, 1 }, "Rainboom After Storms", false));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbThrows, 1 }, "Rainboom On Throws", true));
     {
         // 5 s to 5 min; the middle of the range sits at 30 s so the short times are easy to set
         auto secs = [] (float v, int) { return snowFadeText (v); };
@@ -184,6 +193,8 @@ FreakiePieProcessor::FreakiePieProcessor()
     p_snow = get (ids::snow);
     p_snowIn = get (ids::snowIn); p_snowOut = get (ids::snowOut);
     p_heat = get (ids::heat); p_autoWeather = get (ids::autoWeather);
+    p_rbBoom = get (ids::rbBoom); p_rbLevel = get (ids::rbLevel); p_rbTail = get (ids::rbTail);
+    p_rbHits = get (ids::rbHits); p_rbStorms = get (ids::rbStorms);
     p_stAmount = get (ids::stAmount); p_stBounce = get (ids::stBounce);
     p_stSway = get (ids::stSway);     p_stCutup = get (ids::stCutup);
     p_sgFreeze = get (ids::sgFreeze);
@@ -333,6 +344,10 @@ void FreakiePieProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     heatWave.prepare (sampleRate);
     trixieNoise.prepare (sampleRate);
     stutter.prepare (sampleRate);
+    rainboom.prepare (sampleRate, samplesPerBlock);
+    rbHitsDetector.prepare (sampleRate);
+    rbMono.setSize (1, jmax (1, samplesPerBlock), false, true, true);
+    rbButtonWas = p_rbBoom->load() > 0.5f; rbRainWas = p_rain->load() > 0.5f; rbRequestsSeen = rbRequests.load();
     thruSm = p_grainsThru->load();
     bypassSm = p_fxBypass->load() > 0.5f ? 1.0f : 0.0f;
     grainsLevelSm = p_grainsLevel->load();
@@ -567,6 +582,7 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         }
         grainFifoCount += std::min (n, room);
     }
+    rainboomBlock (inL, inR, oL, oR, n);   // (after the effects: the weather, the EQ and the limiter still shape it)
     spectralFreezeAmount.store (engine.getSpectralFreezeAmount());
     weather.process (oL, oR, n, p_rain->load() > 0.5f, p_helium->load() > 0.5f, p_cloudy->load() > 0.5f);
     rainAmount.store (weather.getRain());
@@ -598,6 +614,34 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     }
     freezeAmount.store (engine.getFreezeAmount());
     outputLevel.store (jmax (buffer.getMagnitude (0, 0, n), numOut > 1 ? buffer.getMagnitude (1, 0, n) : 0.0f));
+}
+
+// The rainboom: what sets one off (the switch, the editor, a hit, the rain stopping), then the dive,
+// the boom and the rainbow, made from what the effects are playing, mixed in on top.
+void FreakiePieProcessor::rainboomBlock (const float* inL, const float* inR, float* oL, float* oR, int n)
+{
+    float dive = -1.0f;   // < 0: nothing new
+    const bool button = p_rbBoom->load() > 0.5f;
+    if (button && ! rbButtonWas) dive = 0.7f;
+    rbButtonWas = button;
+    if (const int r = rbRequests.load(); r != rbRequestsSeen) { rbRequestsSeen = r; dive = jlimit (0.0f, 3.0f, rbRequestDive.load()); }
+    const bool rainNow = p_rain->load() > 0.5f;
+    if (rbRainWas && ! rainNow && p_rbStorms->load() > 0.5f) dive = 0.9f;   // the storm clears
+    rbRainWas = rainNow;
+    const bool hit = rbHitsDetector.process (inL, inR, n, 1.5f);
+    if (hit && p_rbHits->load() > 0.5f && dive < 0.0f && rainboom.secondsSinceBoom() > 1.5) dive = 0.0f;
+    if (dive >= 0.0f) rainboom.fire (dive);
+
+    if (rbMono.getNumSamples() < n) rbMono.setSize (1, n, false, true, true);
+    float* m = rbMono.getWritePointer (0);
+    for (int i = 0; i < n; ++i) m[i] = 0.5f * (oL[i] + oR[i]);
+    fp::Rainboom::Settings rs;
+    rs.tailSeconds = p_rbTail->load();
+    rainboom.process (m, n, rs);
+    if (rainboom.active()) rainboom.addStereo (oL, oR, n, p_rbLevel->load(), rs);
+    rainboomBooms.store (rainboom.numBooms());
+    rainboomDives.store (rainboom.numDives());
+    rainboomDiveLeft.store (rainboom.diveSecondsLeft());
 }
 
 AudioProcessorEditor* FreakiePieProcessor::createEditor() { return new FreakiePieEditor (*this); }
@@ -675,7 +719,7 @@ void FreakiePieProcessor::resetToNormal()
 
 bool FreakiePieProcessor::trixieMayTouch (const String& id)
 {
-    for (auto* no : { ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::heat, ids::heatIn, ids::heatOut, ids::autoWeather, ids::balloonSfx, ids::popsThru, ids::grainsLevel, ids::catchFrom })
+    for (auto* no : { ids::rbBoom, ids::rbHits, ids::rbStorms, ids::rbThrows, ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::heat, ids::heatIn, ids::heatOut, ids::autoWeather, ids::balloonSfx, ids::popsThru, ids::grainsLevel, ids::catchFrom })
         if (id == no) return false;
     return ! id.endsWith ("Owned");
 }
