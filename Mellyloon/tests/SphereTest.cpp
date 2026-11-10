@@ -248,6 +248,48 @@ int main (int argc, char** argv)
         check (yw0 < 0.2, "(control: without the decorrelators the two copies were one coherent, phasing sound)", "Y / W " + juce::String (yw0, 2));
     }
 
+    std::printf ("frozen balloons\n");
+    {
+        // a tone caught in a full sound balloon and frozen: about as loud as the tone that went in
+        FreakiePieProcessor p;
+        allOff (p);
+        auto& v = p.balloonFX.voice[0];
+        double inW = 0, frozenW = 0;
+        // one run: 2 s of the tone alone (the level to match), 2 s caught into the balloon, then it's tied
+        // off (frozen) and the input goes quiet
+        auto tone = [&] (int i)
+        {
+            if (i == (int) (2 * SR)) v.mode = 1;
+            if (i == (int) (4 * SR)) v.mode = 2;
+            const float x = i < (int) (4 * SR) ? 0.3f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 330.0 * i / SR) : 0.0f;
+            return std::pair<float, float> { x, x };
+        };
+        v.size = 1.0f; v.semis = 0.0f;
+        auto r = render (p, 16, 8.0, tone);
+        std::vector<float> a (r.out[0].begin() + (long) (SR / 2), r.out[0].begin() + (long) (2 * SR)), b (r.out[0].begin() + (long) (6 * SR), r.out[0].end());
+        inW = rms (a); frozenW = rms (b);
+        std::printf ("    (tone in: %.1f dBFS in W, frozen balloon: %.1f dBFS)\n", db (inW), db (frozenW));
+        check (std::abs (db (frozenW) - db (inW)) < 2.0, "a full frozen balloon is as loud as what went in", juce::String (db (frozenW) - db (inW), 1) + " dB");
+        // and a small one (pumped for a moment): muffled, but no quieter
+        {
+            FreakiePieProcessor q;
+            allOff (q);
+            auto& w = q.balloonFX.voice[0];
+            auto tone2 = [&] (int i)
+            {
+                if (i == (int) (2 * SR)) w.mode = 1;
+                if (i == (int) (4 * SR)) w.mode = 2;
+                const float x = i < (int) (4 * SR) ? 0.3f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 330.0 * i / SR) : 0.0f;
+                return std::pair<float, float> { x, x };
+            };
+            w.size = 0.3f; w.semis = 0.0f;
+            auto r2 = render (q, 16, 8.0, tone2);
+            std::vector<float> a2 (r2.out[0].begin() + (long) (SR / 2), r2.out[0].begin() + (long) (2 * SR)), b2 (r2.out[0].begin() + (long) (6 * SR), r2.out[0].end());
+            const double d2 = db (rms (b2)) - db (rms (a2));
+            check (std::abs (d2) < 3.0, "a small frozen balloon is muffled but as loud", juce::String (d2, 1) + " dB");
+        }
+    }
+
     std::printf ("distance (after the IEM RoomEncoder)\n");
     {
         // level: 1 / distance (near is louder)
@@ -260,7 +302,18 @@ int main (int argc, char** argv)
             return rms (out.out[0], (size_t) SR / 2);
         };
         const double nearL = levelAt (0.2f), farL = levelAt (0.8f);
-        check (db (nearL / farL) > 7.0 && db (nearL / farL) < 14.0, "2.4 m away is louder than 9.6 m (1 / distance, with the room)", juce::String (db (nearL / farL), 1) + " dB");
+        check (db (nearL / farL) > 7.0 && db (nearL / farL) < 14.0, "nearer is louder (1 / distance, with the room)", juce::String (db (nearL / farL), 1) + " dB");
+        // the bubble: the same sound in the same place, louder in a small bubble than a big one
+        auto bubbleLevel = [&] (float knob)
+        {
+            FreakiePieProcessor p;
+            allOff (p);
+            setParam (p, ids::spread, knob);
+            auto out = render (p, 16, 1.0, stereoNoise);
+            return rms (out.out[0], (size_t) SR / 2);
+        };
+        const double small = bubbleLevel (0.0f), big = bubbleLevel (1.0f);
+        check (db (small / big) > 15.0, "a small bubble (1.5 m) is much louder than a big one (24 m)", juce::String (db (small / big), 1) + " dB");
 
         // time: the sound arrives distance / 343 m/s later, and the walls answer after it
         fp::DistanceSource ds;
@@ -406,6 +459,53 @@ int main (int argc, char** argv)
         check (gain > -3.0 && gain < 4.0, "a stereo input comes out at about its own level (W)", juce::String (gain, 1) + " dB");
         auto r2 = render (p, 2, 0.5, gen);
         check (p.ambiFallback.load() && r2.finite, "on a 2-channel track it says so (and sends the first two channels)");
+    }
+
+    std::printf ("gain staging (stereo noise in at -18 dBFS per channel, uncorrelated; W out)\n");
+    {
+        juce::Random gr (9);
+        const float amp = 0.125f * std::sqrt (3.0f) * 1.0f;   // uniform noise this wide: -18 dBFS rms
+        auto noise18 = [&] (int) { return std::pair<float, float> { (gr.nextFloat() * 2.0f - 1.0f) * amp, (gr.nextFloat() * 2.0f - 1.0f) * amp }; };
+        const double inDb = db (amp / std::sqrt (3.0));
+        double dryDb = 0;
+        auto measure = [&] (const char* what, std::function<void (FreakiePieProcessor&)> setup, double lo, double hi, bool relToDry)
+        {
+            FreakiePieProcessor p;
+            allOff (p);
+            setup (p);
+            auto r = render (p, 16, 4.0, noise18);
+            const double w = db (rms (r.out[0], (size_t) (2 * SR)));
+            float pk = 0; for (size_t i = (size_t) (2 * SR); i < r.out[0].size(); ++i) pk = std::max (pk, std::abs (r.out[0][i]));
+            const double rel = w - (relToDry ? dryDb : inDb);
+            std::printf ("    %-44s W %6.1f dBFS  (%+5.1f dB vs %s)  peak %6.1f dBFS\n", what, w, rel, relToDry ? "dry" : "input", db (pk));
+            check (r.finite && rel >= lo && rel <= hi, (juce::String ("  levels: ") + what).toRawUTF8());
+            return w;
+        };
+        dryDb = measure ("dry, one grain, effects off", [] (FreakiePieProcessor&) {}, -2.0, 2.0, false);
+        measure ("spectral smear, mix 50 %", [] (FreakiePieProcessor& p) { setParam (p, ids::sgMix, 0.5f); }, -4.0, 2.0, true);
+        measure ("pitch shifter +7, mix 50 %", [] (FreakiePieProcessor& p) { setParam (p, ids::psMix, 0.5f); }, -4.0, 2.0, true);
+        measure ("granulator, mix 50 %", [] (FreakiePieProcessor& p) { setParam (p, ids::grMix, 0.5f); }, -4.0, 2.0, true);
+        measure ("granulator, mix 100 % (grains alone)", [] (FreakiePieProcessor& p) { setParam (p, ids::grMix, 1.0f); }, -5.0, 2.0, true);
+        measure ("reverb, mix 30 %", [] (FreakiePieProcessor& p) { setParam (p, ids::rvMix, 0.3f); }, -3.0, 2.0, true);
+        measure ("reverb, mix 100 % (wet alone)", [] (FreakiePieProcessor& p) { setParam (p, ids::rvMix, 1.0f); }, -6.0, 2.0, true);
+        measure ("gumball machine, stutter 60 %", [] (FreakiePieProcessor& p) { setParam (p, ids::stOwned, 1.0f); setParam (p, ids::stAmount, 0.6f); }, -3.0, 2.0, true);
+        for (int e = 0; e < fp::StoreFX::kNum; ++e)
+        {
+            const juce::String nm = juce::String ("store: ") + fp::StoreFX::infos()[(size_t) e].name;
+            measure (nm.toRawUTF8(), [e] (FreakiePieProcessor& p) { setParam (p, ids::store (e, ids::storeOwned), 1.0f); }, -3.0, 4.0, true);
+        }
+        measure ("4 grains orbiting, copies spatial, smear 30 %", [] (FreakiePieProcessor& p) { setParam (p, ids::grains, 4.0f); setParam (p, ids::flight, 1.0f); setParam (p, ids::sgMix, 0.3f); }, -3.0, 3.0, true);
+        measure ("16 grains, smear + pitch 50 %", [] (FreakiePieProcessor& p) { setParam (p, ids::grains, 16.0f); setParam (p, ids::flight, 1.0f); setParam (p, ids::sgMix, 0.5f); setParam (p, ids::psMix, 0.5f); }, -4.0, 3.0, true);
+        measure ("the default preset (Sugarcube Corner)", [] (FreakiePieProcessor& p) { p.setCurrentProgram (0); }, -3.0, 3.0, true);
+        measure ("copies mode, 4 grains", [] (FreakiePieProcessor& p) { setParam (p, ids::grainMode, 2.0f); setParam (p, ids::grains, 4.0f); setParam (p, ids::flight, 1.0f); }, -3.0, 3.0, true);
+        // at a normal level the leveler and limiter should do nothing
+        {
+            FreakiePieProcessor p;
+            p.setCurrentProgram (0);
+            render (p, 16, 3.0, noise18, false);
+            check (p.levelerGainNow() > 0.999f && p.limiterGainNow() > 0.999f, "  levels: at -18 dBFS the leveler and limiter stay out of it",
+                   "leveler " + juce::String (db (p.levelerGainNow()), 2) + " dB, limiter " + juce::String (db (p.limiterGainNow()), 2) + " dB");
+        }
     }
 
     std::printf ("many grains, every way of flying, all the weather\n");

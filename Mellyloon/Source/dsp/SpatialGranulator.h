@@ -71,7 +71,7 @@ public:
         if ((int) tmp.size() < n) tmp.resize ((size_t) n);
         const float overlap = std::clamp (s.overlap, 1.0f, 96.0f);
         const double lenS = std::clamp ((double) s.lengthMs * 0.001, 0.005, 2.0);
-        const float norm = std::min (1.0f, std::sqrt (1.0f / (overlap * std::max (0.05f, grainShapePower (s.shape, s.chalk))))) * 1.41f;
+        const float norm = std::min (1.0f, std::sqrt (1.0f / (overlap * std::max (0.05f, grainShapePower (s.shape, s.chalk))))) * 1.75f;   // (IEM's 1.41, plus 2 dB: the cloud alone sits level with the dry sound)
 
         // record (unless frozen: then the writing fades out and the buffer holds still)
         const float wTarget = s.freeze ? 0.0f : 1.0f;

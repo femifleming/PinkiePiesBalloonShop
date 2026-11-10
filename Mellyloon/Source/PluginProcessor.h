@@ -178,7 +178,10 @@ public:
     //==========================================================================
     // the sphere: up to 16 grains, each a whole copy of the chain, flying round inside it
     static constexpr int kGrains = fp::Flight::kMax;
-    static constexpr float sphereMetres = 12.0f;   // the sphere's radius: distance 1 is 12 m away
+    // the Distance knob is the size of the bubble you're in: its radius, 1.5 m (everything close and loud)
+    // to 24 m (everything far, quiet and roomy)
+    static float bubbleMetres (float knob) noexcept { return 1.5f * std::pow (16.0f, juce::jlimit (0.0f, 1.0f, knob)); }
+    float bubbleNow = 7.9f;
     struct GrainView   // what the editor sees of each grain (written by the audio thread)
     {
         std::atomic<float> x { 0.0f }, y { 0.0f }, z { 0.0f }, level { 0.0f }, presence { 0.0f };

@@ -8,7 +8,7 @@ The same multi-effect you play as balloons, inside a glass sphere you can turn r
 
 - **Grains.** Little balloon bouquets fly round inside the sphere. Drop them in from the jar (up to 16). Your dry sound plays once, from a loudspeaker you can drag. On *spatial* (the default) every grain carries its own copy of the effects, each copy's sound a point at its grain, its settings deviating from yours and freezing at its own times. On *scatter* there's one copy. On *copies* every grain is the whole shop, dry sound and all.
 - **The granulator** works like the IEM GranularEncoder: a cloud of short Hann-windowed mono grains (about 20 at once by default), each born at its own direction round one of the grains and encoded there, with Hermite interpolation and anti-aliased octave-up reads.
-- **Flight.** Still, orbit, the Lorenz attractor, a flock (boids) or random glides, through the whole inside of the sphere, with speed and distance (up to 12 m).
+- **Flight.** Still, orbit, the Lorenz attractor, a flock (boids) or random glides, through the whole inside of the sphere, with speed, inside a bubble whose size is the Distance knob (1.5 m to 24 m).
 - **Distance, after the IEM RoomEncoder.** Every sound is a point with its own propagation delay (so moving sounds Doppler-shift), 1/r level, a little air absorption and first-order reflections from the walls of a room round the sphere.
 - **Weather in the sphere.** Clouds, rain, snow and heat drift through the glass as patches. A grain they pass over has its settings shaken up at random; snow freezes it and the heat smears it.
 - **One reverb** for the whole sphere, built like the IEM FdnReverb: 64 lines with IEM's prime delay recipe, Hadamard mixing and frequency-dependent decay, run on all 16 channels.

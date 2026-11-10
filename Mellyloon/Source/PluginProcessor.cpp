@@ -178,7 +178,7 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
                                          return sf < 1.0f ? String (sf, 2) + "x" : String (sf, 1) + "x";
                                      })));
     layout.add (std::make_unique<F> (ParameterID { ids::spread, 1 }, "Distance", NormalisableRange<float> (0.0f, 1.0f), 0.6f,
-                                     A().withStringFromValueFunction ([] (float v, int) { return String (v * FreakiePieProcessor::sphereMetres, 1) + " m"; })));
+                                     A().withStringFromValueFunction ([] (float v, int) { return String (FreakiePieProcessor::bubbleMetres (v), 1) + " m bubble"; })));
     return layout;
 }
 
@@ -610,7 +610,10 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         const int held = heldGrain.load();
         if (isPositiveAndBelow (held, kGrains)) flightPaths.place (held, { heldX.load(), heldY.load(), heldZ.load() });
     }
-    flightPaths.step (seconds, (int) std::lround (p_flight->load()), p_flightSpeed->load(), p_spread->load(), points);
+    // (the grains fly through most of the bubble; how big the bubble is, is the Distance knob)
+    flightPaths.step (seconds, (int) std::lround (p_flight->load()), p_flightSpeed->load(), 0.85f, points);
+    bubbleNow += (bubbleMetres (p_spread->load()) - bubbleNow) * std::min (1.0f, seconds / 0.15f);   // (glides, so turning it doesn't jump)
+    const float sphereMetres = bubbleNow;
     {
         const bool on[fp::SkyPatches::numKinds] = { p_cloudy->load() > 0.5f, p_rain->load() > 0.5f, p_snow->load() > 0.5f, p_heat->load() > 0.5f };
         sky.step (seconds, on);

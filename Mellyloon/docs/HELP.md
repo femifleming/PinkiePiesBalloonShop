@@ -69,7 +69,7 @@ The flight token picks how the grains move, and speed sets how fast.
 
 Still keeps each grain where you dropped it. Orbit sends each one round you on its own tilted ring. Lorenz flies them along the Lorenz attractor, the butterfly, each one starting somewhere else on it. Flock makes them a flock of birds (boids): they keep apart, line up and stay together. Random picks a new place every so often and glides there.
 
-Distance is how far out they fly, from right by you to 12 metres away at the glass. It sounds the way distance does, after the IEM RoomEncoder: further away is quieter and a little duller, the sound takes longer to arrive (so anything flying towards you or away bends in pitch, like a passing car), and the walls of a room round the sphere answer each sound faintly. Close in, a sound spreads round your head.
+Distance is the size of the bubble you're in, from 1.5 metres to 24. In a small bubble everything is close and loud and the room answers quickly; in a big one everything is far away, quieter, a little duller and roomier. It sounds the way distance does, after the IEM RoomEncoder: the sound takes longer to arrive from further away (so anything flying towards you or away bends in pitch, like a passing car), and the walls of a room round the bubble answer each sound faintly. Close in, a sound spreads round your head.
 
 You can drag a grain while it flies. Let go and it carries on from there.
 

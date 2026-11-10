@@ -237,7 +237,9 @@ public:
         }
         // an even, diffuse field in SN3D has each order l at 1 / (2l + 1) of the omni channel's energy;
         // the network gives every channel the same, so the higher orders are brought down to that
-        for (int c = 0; c < kCh; ++c) orderWeight[c] = 1.0f / std::sqrt ((float) (2 * orderOf (c) + 1));   // (W as it was)
+        // (each channel carries one of the 64 lines, so the whole tail's level is brought up to match the dry
+        // sound: at 100 % wet the omni channel is about as loud as the sound going in, measured by the tests)
+        for (int c = 0; c < kCh; ++c) orderWeight[c] = 3.4f / std::sqrt ((float) (2 * orderOf (c) + 1));
         decayNow = -1.0f;
         setDecay (3.0f);
         update();

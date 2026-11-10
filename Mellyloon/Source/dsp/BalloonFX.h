@@ -206,6 +206,10 @@ private:
         std::array<Grain, 40> grains;
         int nextSpawn = 0;
         float lvl = 0.0f;
+        // loudness matching: how loud the caught sound was, how loud the frozen grains come out (both
+        // mean squares), and the make-up gain that brings the one up to the other
+        double recPow = 0.0;
+        float outPow = 0.0f, makeup = 1.0f;
         Rng rng;
     };
 
@@ -229,6 +233,7 @@ private:
         if (v.mode == 0 && want == 1)
         {
             v.mode = 1; v.len = 0; v.x = 0.0f; v.fade = 1.0f; v.lvl = 0.0f;
+            v.recPow = 0.0; v.outPow = 0.0f; v.makeup = 1.0f;
             v.ic1[0] = v.ic1[1] = v.ic2[0] = v.ic2[1] = 0.0f;
             v.gc1[0] = v.gc1[1] = v.gc2[0] = v.gc2[1] = 0.0f;
             for (auto& g : v.grains) g.on = false;
@@ -262,6 +267,7 @@ private:
             {
                 v.buf[0][(size_t) v.len] = inL[s];
                 v.buf[1][(size_t) v.len] = inR[s];
+                v.recPow += 0.5 * ((double) inL[s] * inL[s] + (double) inR[s] * inR[s]);
                 ++v.len;
             }
             if (v.mode == 2) v.x = std::min (1.0f, v.x + xInc);
@@ -296,8 +302,19 @@ private:
             const float g8 = 0.8f * v.fade;
             const float mlo = lowpass (v.ic1[0], v.ic2[0], mL * (1.0f - v.x), a1, a2, a3) * g8;
             const float mro = lowpass (v.ic1[1], v.ic2[1], mR * (1.0f - v.x), a1, a2, a3) * g8;
-            const float glo = lowpass (v.gc1[0], v.gc2[0], gL * v.x, a1, a2, a3) * g8;
-            const float gro = lowpass (v.gc1[1], v.gc2[1], gR * v.x, a1, a2, a3) * g8;
+            // the frozen grains come out as loud as the sound that was caught: the balloon's filter and
+            // the grains' layering change the colour, not the level (a make-up gain, up to +12 dB,
+            // gliding over about half a second so it never pumps)
+            float glo = lowpass (v.gc1[0], v.gc2[0], gL * v.x, a1, a2, a3);
+            float gro = lowpass (v.gc1[1], v.gc2[1], gR * v.x, a1, a2, a3);
+            if (v.mode == 2 && v.len > 0)
+            {
+                v.outPow += 0.0002f * (0.5f * (glo * glo + gro * gro) - v.outPow);
+                const float want = (float) (v.recPow / (double) v.len);
+                const float target = v.outPow > 1.0e-9f ? std::clamp (std::sqrt (want / v.outPow), 0.25f, 4.0f) : v.makeup;
+                v.makeup += 0.00004f * (target - v.makeup);
+            }
+            glo *= v.makeup * v.fade; gro *= v.makeup * v.fade;
             outL[s] += mlo; outR[s] += mro;
             grL[s] += glo;  grR[s] += gro;
             peak = std::max (peak, std::max (std::abs (mlo + glo), std::abs (mro + gro)));

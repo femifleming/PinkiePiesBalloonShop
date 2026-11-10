@@ -146,7 +146,7 @@ public:
     }
     float getGain() const noexcept { return gain; }
 private:
-    static constexpr float threshDb = -9.0f, knee = 6.0f, ratio = 4.0f;
+    static constexpr float threshDb = -3.0f, knee = 6.0f, ratio = 4.0f;
     const float kneeLo = std::pow (10.0f, (threshDb - knee * 0.5f) / 20.0f);
     float atk = 0.01f, rel = 0.0001f, env = 0.0f, gain = 1.0f;
 };
