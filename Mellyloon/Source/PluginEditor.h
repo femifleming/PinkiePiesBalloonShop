@@ -344,6 +344,13 @@ public:
     float scale = 1.0f, depth = 0.0f, dragDepth = 0.0f;
     bool placed3d = false;
     juce::Point<float> lastVel2;   // (pushes from the room arrive as screen velocities; the difference is put back in 3-D)
+    float flyIn = 1.0f;            // 0..1 while it flies from where it was let go (a pump, the store) into the sphere
+    juce::Point<float> flyFrom;
+    // its picture is cached (the squash, the dance and the stretch are in its transform), and only redrawn
+    // when what it shows changes; lookKey says what it shows
+    virtual juce::int64 lookKey() const { return -1; }   // -1: always redraw (the sound balloons' live trace)
+    juce::int64 lastLook = -2;
+    bool placing = false;          // (moving it isn't a reason to redraw its picture)
 
 protected:
     void beginMove (const juce::MouseEvent&);
@@ -371,6 +378,7 @@ public:
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     float inflation() const noexcept override;
+    juce::int64 lookKey() const override;
 
     bool isToggle = false, isChoice = false;   // switches flip on click; choices step through their options
     bool isStepped = false;                    // whole-number settings (octave): one step per click / scroll flick
@@ -488,6 +496,8 @@ public:
     static constexpr int S = 76;
     juce::Point<float> pos;
     float scale = 1.0f, depth = 0.0f, hop = 0.0f, hopVel = 0.0f, glow = 0.0f, presence = 0.0f, weather = 0.0f;
+    float flyIn = 1.0f;            // 0..1 while it flies in from the jar
+    juce::Point<float> flyFrom;
     int frozen = 0, stuttersSeen = 0;
     bool dragging = false;
 private:
@@ -530,6 +540,8 @@ private:
         void mouseDrag (const juce::MouseEvent& e) override { owner.contentMouse (e, 1); }
         void mouseUp (const juce::MouseEvent& e) override   { owner.contentMouse (e, 2); }
         void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& w) override { owner.contentWheel (e, w); }
+        void mouseMagnify (const juce::MouseEvent& e, float scale) override { const auto p = owner.toContent (e); if (owner.insideSphere (p)) owner.zoomAt (p, scale); }
+        void mouseDoubleClick (const juce::MouseEvent& e) override { if (owner.insideSphere (owner.toContent (e))) owner.resetView(); }
         FreakiePieEditor& owner;
     };
 
@@ -740,13 +752,19 @@ public:
     static constexpr float floorZ = -0.56f * sphereR;   // the floor the bows stand on
     juce::Point<float> sphereCentre { 546.0f, 298.0f };
     float viewYaw = 0.0f, viewPitch = 0.36f;
+    // zoom: scroll or pinch on the empty glass (towards the cursor); double-click the glass to set it back
+    float viewZoom = 1.0f;
+    juce::Point<float> viewPan;
+    juce::Point<float> viewCentre() const noexcept { return sphereCentre + viewPan; }
+    void zoomAt (juce::Point<float> at, float factor);
+    void resetView();
     fp::ambi::Vec3 toView (fp::ambi::Vec3 w) const noexcept;        // world -> (right, up, towards you)
     fp::ambi::Vec3 fromView (fp::ambi::Vec3 v) const noexcept;
     juce::Point<float> project (fp::ambi::Vec3 w, float* scale = nullptr, float* depth = nullptr) const noexcept;
     fp::ambi::Vec3 unproject (juce::Point<float> screen, float depth) const noexcept;
     bool floorHit (juce::Point<float> screen, fp::ambi::Vec3& out) const noexcept;   // where a click lands on the floor
     float sphereScreenRadius() const noexcept;
-    bool insideSphere (juce::Point<float> screen) const noexcept { return screen.getDistanceFrom (sphereCentre) < sphereScreenRadius(); }
+    bool insideSphere (juce::Point<float> screen) const noexcept { return screen.getDistanceFrom (viewCentre()) < sphereScreenRadius(); }
     fp::ambi::Vec3 ringPoint (float shelfX) const noexcept;         // a place along the order -> its spot on the floor's ring
     static constexpr float stringScale = 0.8f, balloonScale = 0.82f;
 private:
@@ -754,6 +772,19 @@ private:
     juce::Point<float> rotateFrom;
     float yawFrom = 0.0f, pitchFrom = 0.0f;
     void drawSphereBack (juce::Graphics&) const;
+    // Speed: what doesn't move every frame is drawn once into an image and reused: the room's background
+    // (until the preset or the weather's tint changes), the sphere's glass, grid and floor (until you turn
+    // or zoom it), and the energy on the glass (stamped into pixels a few times a second)
+    struct Layer { juce::Image img; juce::Rectangle<float> area; std::vector<float> key; float scale = 0.0f; };
+    mutable Layer bgLayer, backLayer, frontLayer, roomLayer;
+    void drawRoom (juce::Graphics&, juce::Rectangle<float> full, float blur);
+    void drawRoomItems (juce::Graphics&);
+    juce::Image skinBack, skinFront;
+    juce::Rectangle<float> skinArea;
+    template <typename Fn> void drawCached (juce::Graphics&, Layer&, juce::Rectangle<float> area, std::vector<float> key, Fn&& paintFn) const;
+    std::vector<float> viewKey() const;
+    juce::Rectangle<float> sphereArea() const;
+    void renderSkin();
     void drawSphereFront (juce::Graphics&) const;
     void depthSort();
     std::vector<juce::Component*> drawnOrder;
@@ -778,7 +809,7 @@ private:
     juce::OwnedArray<juce::Component> grainMarkers;
     juce::Rectangle<float> jarArea { 146.0f, 300.0f, 84.0f, 104.0f };
     bool jarDragging = false;
-    juce::Point<float> jarDragAt;
+    juce::Point<float> jarDragAt, grainDropAt;
     void addGrain (const fp::ambi::Vec3* at);
     void removeGrain();
     int grainCount() const;

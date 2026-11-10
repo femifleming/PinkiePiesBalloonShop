@@ -45,6 +45,10 @@ The shop is inside a glass sphere now, and you're the little head in the middle,
 
 Drag the empty glass to turn the sphere round and look at it from anywhere. Turning it only changes your view, never the sound.
 
+Scroll or pinch on the empty glass to zoom in, towards wherever the cursor is: the balloons grow so they're easy to read and edit, and the room behind blurs and darkens. Double-click the glass to set the view back.
+
+A sound balloon you catch, or an effect you buy, flies from the pump or the store into the sphere, so you can see where it goes.
+
 The words on the glass show which way is ahead, left, right, behind and up. The glow on the glass and the map at the top left show where the sound is loudest, like the IEM EnergyVisualizer: red is the loudest place, then yellow, green and blue.
 
 ![The sphere, turned](help/sphere_turned.jpg)

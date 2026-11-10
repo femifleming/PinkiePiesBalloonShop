@@ -91,6 +91,6 @@ if(MELLYLOON_BUILD_TESTS)
 
     juce_add_gui_app(MellyloonHostTest PRODUCT_NAME "MellyloonHostTest")
     target_sources(MellyloonHostTest PRIVATE tests/HostTest.cpp Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Presets.cpp)
-    target_compile_definitions(MellyloonHostTest PRIVATE ${SPH_DEFS})
+    target_compile_definitions(MellyloonHostTest PRIVATE ${SPH_DEFS} JUCE_MODAL_LOOPS_PERMITTED=1)
     target_link_libraries(MellyloonHostTest PRIVATE MellyloonAssets juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags)
 endif()

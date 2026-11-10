@@ -9,6 +9,7 @@
 #include "../Source/PluginEditor.h"
 
 using namespace juce;
+extern int mellyloonDbgFrames;
 
 // every failed check says where it is
 #define FAIL_HERE() do { ++fails; std::printf ("  ^ FAILED (HostTest.cpp line %d)\n", __LINE__); } while (0)
@@ -49,6 +50,7 @@ struct FreakieTestAccess
     }
     static Floater& balloon (FreakiePieEditor& e, int i) { return *e.floaters[i]; }
     static void setView (FreakiePieEditor& e, float yaw, float pitch) { e.viewYaw = yaw; e.viewPitch = pitch; }
+    static void setZoom (FreakiePieEditor& e, float z) { e.viewZoom = z; }
     static Point<float> bow (FreakiePieEditor& e) { return e.anchors[0].pos; }
     static int count (FreakiePieEditor& e) { return e.numParamBalloons; }
     static float coldVis (FreakiePieEditor& e) { return e.coldVis; }
@@ -300,6 +302,56 @@ int main (int argc, char** argv)
     int fails = 0;
     FreakiePieProcessor::rememberLastState = false;   // start every test instance from the defaults
 
+    // MELLY_LIVE=1: the real window on screen, sound running, frames counted in several states
+    if (std::getenv ("MELLY_LIVE") != nullptr)
+    {
+        FreakiePieProcessor p;
+        p.setPlayConfigDetails (2, 16, 48000, 512);
+        p.prepareToPlay (48000, 512);
+        auto set = [&] (const char* id, float v) { if (auto* prm = p.apvts.getParameter (id)) prm->setValueNotifyingHost (prm->convertTo0to1 (v)); };
+        DocumentWindow win ("Mellyloon fps", Colours::black, 0);
+        win.setUsingNativeTitleBar (true);
+        auto* ed = p.createEditorAndMakeActive();
+        win.setContentOwned (ed, true);
+        ed->setSize (FreakiePieEditor::designW, FreakiePieEditor::designH);
+        win.centreWithSize (win.getWidth(), win.getHeight());
+        win.setVisible (true);
+        win.toFront (true);
+        AudioBuffer<float> buf (16, 512); MidiBuffer m;
+        Random rnd (4);
+        int blk = 0;
+        double worst = 1e9;
+        auto run = [&] (const char* what)
+        {
+            MessageManager::getInstance()->runDispatchLoopUntil (800);
+            const int f0 = mellyloonDbgFrames;
+            const double t0 = Time::getMillisecondCounterHiRes();
+            while (Time::getMillisecondCounterHiRes() - t0 < 3000.0)
+            {
+                buf.clear();
+                for (int i = 0; i < 512; ++i) { const float v = 0.2f * std::sin ((blk * 512 + i) * 0.02f) + 0.03f * (rnd.nextFloat() - 0.5f); buf.setSample (0, i, v); buf.setSample (1, i, v); }
+                ++blk; p.processBlock (buf, m);
+                MessageManager::getInstance()->runDispatchLoopUntil (10);
+            }
+            const double fps = (mellyloonDbgFrames - f0) / ((Time::getMillisecondCounterHiRes() - t0) * 0.001);
+            std::printf ("live fps (%s): %.1f\n", what, fps);
+            worst = jmin (worst, fps);
+        };
+        run ("default: 4 grains orbiting");
+        set (ids::grains, 16.0f);
+        run ("16 grains");
+        set (ids::cloudy, 1.0f); set (ids::rain, 1.0f);
+        run ("16 grains in a storm");
+        set (ids::cloudy, 0.0f); set (ids::rain, 0.0f); set (ids::snow, 1.0f);
+        run ("16 grains, snowing");
+        set (ids::snow, 0.0f);
+        if (auto* fe = dynamic_cast<FreakiePieEditor*> (ed)) FreakieTestAccess::setZoom (*fe, 1.8f);
+        run ("zoomed in");
+        win.clearContentComponent();
+        std::printf (worst >= 50.0 ? "LIVE FPS OK (worst %.1f)\n" : "LIVE FPS TOO LOW (worst %.1f)\n", worst);
+        return worst >= 50.0 ? 0 : 1;
+    }
+
     // SPHERE_SHOTS=<folder>: the sphere with sound running through it, from a few angles and settings
     if (auto* dir = std::getenv ("SPHERE_SHOTS"))
     {
@@ -359,6 +411,18 @@ int main (int argc, char** argv)
         set (ids::cloudy, 0.0f); set (ids::snow, 0.0f); set (ids::grainMode, 1.0f); set (ids::grains, 10.0f); set (ids::flight, 1.0f); set (ids::grMix, 1.0f);
         play (6.0f);
         shoot ("sphere_scatter_orbit");
+        // a sound balloon caught and let go: mid-way on its flight into the sphere
+        set (ids::grainMode, 0.0f); set (ids::grains, 4.0f); set (ids::grMix, 0.25f);
+        FreakieTestAccess::startSound (e);
+        play (2.0f);
+        FreakieTestAccess::releaseSound (e);
+        FreakieTestAccess::run (e, 0.4f);
+        shoot ("sphere_flying_in");
+        play (2.0f);
+        // zoomed in: the room behind blurs and darkens
+        FreakieTestAccess::setZoom (e, 1.9f);
+        play (1.0f);
+        shoot ("sphere_zoomed");
         return 0;
     }
 

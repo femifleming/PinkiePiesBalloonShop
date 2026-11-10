@@ -290,11 +290,47 @@ void SadLookAndFeel::positionComboBoxText (ComboBox& box, Label& label)
 }
 
 //==============================================================================
+// A floater's picture, cached at the resolution it's seen at (in half-octave steps, so the small
+// changes of size as it moves nearer or further reuse it), redrawn only when it's invalidated.
+namespace
+{
+    struct FloaterCache : public CachedComponentImage
+    {
+        explicit FloaterCache (Floater& c) : owner (c) {}
+        void paint (Graphics& g) override
+        {
+            const float phys = jmax (0.25f, g.getInternalContext().getPhysicalPixelScaleFactor());
+            const float q = std::exp2 (std::ceil (std::log2 (phys) * 2.0f) / 2.0f);
+            const auto b = owner.getLocalBounds();
+            const int w = jmax (1, roundToInt ((float) b.getWidth() * q)), h = jmax (1, roundToInt ((float) b.getHeight() * q));
+            if (! valid || image.getWidth() != w || image.getHeight() != h)
+            {
+                if (image.getWidth() != w || image.getHeight() != h) image = Image (Image::ARGB, w, h, true, SoftwareImageType());
+                else image.clear (image.getBounds());
+                Graphics ig (image);
+                ig.addTransform (AffineTransform::scale (q));
+                owner.paintEntireComponent (ig, true);
+                valid = true;
+            }
+            g.setColour (Colours::black.withAlpha (owner.getAlpha()));
+            g.drawImageTransformed (image, AffineTransform::scale ((float) b.getWidth() / (float) w, (float) b.getHeight() / (float) h), false);
+        }
+        bool invalidateAll() override { if (! owner.placing) valid = false; return true; }
+        bool invalidate (const Rectangle<int>&) override { if (! owner.placing) valid = false; return true; }
+        void releaseResources() override { image = Image(); valid = false; }
+        Floater& owner;
+        Image image;
+        bool valid = false;
+    };
+}
+
+//==============================================================================
 // Floater: anything on a string
 Floater::Floater (FreakiePieEditor& e, float len, int anchorIndex)
     : anchor (anchorIndex), stringLength (len), owner (e)
 {
     setSize (S, S);
+    setCachedComponentImage (new FloaterCache (*this));
 }
 
 float Floater::collisionRadius() const noexcept
@@ -312,8 +348,14 @@ Point<float> Floater::knotWorld() const noexcept
 
 void Floater::place()
 {
-    setTransform (AffineTransform::rotation (angle, S * 0.5f, S * 0.5f).scaled (scale, scale, S * 0.5f, S * 0.5f)
+    // the squash, the dance and the helium's stretch, round the middle of its body, then its tilt and size
+    const auto sh = balloonShape ({ 0, 0, (float) S, (float) S }, inflation());
+    const float sc = 1.0f + 0.05f * dance;
+    placing = true;
+    setTransform (AffineTransform::scale ((1.0f + squash) * sc * (1.0f - 0.035f * stretch), (1.0f - squash) * sc * (1.0f + 0.07f * stretch), sh.cx, sh.cy)
+                      .rotated (angle, S * 0.5f, S * 0.5f).scaled (scale, scale, S * 0.5f, S * 0.5f)
                       .translated (pos.x - S * 0.5f, pos.y - S * 0.5f));
+    placing = false;
 }
 
 bool Floater::hitTest (int x, int y)
@@ -341,11 +383,9 @@ void Floater::dragMove (const MouseEvent& e)
     dragTarget = p + grabOffset;
 }
 
-void Floater::applySquashAndStretch (Graphics& g, const BalloonShape& sh) const
+void Floater::applySquashAndStretch (Graphics&, const BalloonShape&) const
 {
-    const float sc = 1.0f + 0.05f * dance;
-    g.addTransform (AffineTransform::scale ((1.0f + squash) * sc * (1.0f - 0.035f * stretch),
-                                            (1.0f - squash) * sc * (1.0f + 0.07f * stretch), sh.cx, sh.cy));
+    // (now in the transform: see place())
 }
 
 //==============================================================================
@@ -365,6 +405,20 @@ float Balloon::inflation() const noexcept
     if (fill >= 0.0f) return jmax (fill, value > 0.5f ? 0.2f : 0.0f);
     if (isChoice || isStepped) return 0.45f + 0.55f * param.convertTo0to1 (value);   // always nicely full; grows a little per step
     return isToggle ? (value > 0.5f ? 1.0f : 0.0f) : param.convertTo0to1 (value);
+}
+
+int64 Balloon::lookKey() const
+{
+    // what it shows: how full, hot or not, wandering in a cloud, how wet, frosted and faded, and its text
+    const bool hot = isMouseOverOrDragging() || mode == Mode::adjust;
+    int64 k = (int64) roundToInt (inflation() * 400.0f);
+    k = k * 2 + (hot ? 1 : 0);
+    k = k * 2 + (drifting ? 1 : 0);
+    k = k * 32 + roundToInt (wet * 20.0f);
+    k = k * 32 + roundToInt (frost * 20.0f);
+    k = k * 32 + roundToInt (faded * 20.0f);
+    if (hot || drifting || isChoice || isStepped) k = k * 1000003 + param.getCurrentValueAsText().hashCode();
+    return k & 0x3fffffffffffffffLL;
 }
 
 void Balloon::paint (Graphics& g)
@@ -2116,6 +2170,9 @@ namespace
           "The shop is inside a glass sphere now, and you're the little head in the middle, looking ahead into the screen. "
           "The bows stand on a ring round its floor, in the order the sound goes through the effects, and their balloons float up inside it.\n\n"
           "Drag the empty glass to turn the sphere round and look at it from anywhere. Turning it only changes your view, never the sound.\n\n"
+          "Scroll or pinch on the empty glass to zoom in, towards wherever the cursor is: the balloons grow so they're easy to read and edit, "
+          "and the room behind blurs and darkens. Double-click the glass to set the view back.\n\n"
+
           "The words on the glass show which way is ahead, left, right, behind and up. The glow on the glass and the map at the top left show "
           "where the sound is loudest, like the IEM EnergyVisualizer: red is the loudest place, then yellow, green and blue." },
         { "Grains",
@@ -3159,7 +3216,7 @@ void FreakiePieEditor::contentMouse (const MouseEvent& e, int phase)
         if (jarDragging)
         {
             jarDragging = false;
-            if (insideSphere (p)) { const auto at = unproject (p, 0.0f) * (1.0f / sphereR); addGrain (&at); }
+            if (insideSphere (p)) { grainDropAt = p; const auto at = unproject (p, 0.0f) * (1.0f / sphereR); addGrain (&at); }
             else if (jarArea.contains (p)) addGrain (nullptr);
         }
         popPump.holding = false;
@@ -3191,6 +3248,14 @@ void FreakiePieEditor::contentWheel (const MouseEvent& e, const MouseWheelDetail
     {
         int dir = 0;
         if (wheelStep (nextWheelAcc, w, dir)) { if (dir > 0) addGrain (nullptr); else removeGrain(); }
+        return;
+    }
+    if (insideSphere (p))
+    {
+        // the empty glass: zoom, towards the cursor
+        float d = std::abs (w.deltaY) >= std::abs (w.deltaX) ? w.deltaY : -w.deltaX;
+        if (w.isReversed) d = -d;
+        zoomAt (p, std::exp (jlimit (-0.5f, 0.5f, d * 0.8f)));
         return;
     }
     if (! soundPump.area.expanded (40.0f, 0.0f).contains (p) && ! nextBadge.contains (p)) return;
@@ -3424,15 +3489,17 @@ Point<float> FreakiePieEditor::project (Vec3 w, float* scale, float* depth) cons
 {
     const auto v = toView (w);
     const float k = camDist / std::max (1.0f, camDist - v.z);
-    if (scale != nullptr) *scale = k;
+    if (scale != nullptr) *scale = k * viewZoom;
     if (depth != nullptr) *depth = v.z;
-    return { sphereCentre.x + v.x * k, sphereCentre.y - v.y * k };
+    const auto c = viewCentre();
+    return { c.x + v.x * k * viewZoom, c.y - v.y * k * viewZoom };
 }
 
 Vec3 FreakiePieEditor::unproject (Point<float> s, float depth) const noexcept
 {
     const float k = camDist / std::max (1.0f, camDist - depth);
-    return fromView ({ (s.x - sphereCentre.x) / k, (sphereCentre.y - s.y) / k, depth });
+    const auto c = viewCentre();
+    return fromView ({ (s.x - c.x) / (k * viewZoom), (c.y - s.y) / (k * viewZoom), depth });
 }
 
 bool FreakiePieEditor::floorHit (Point<float> s, Vec3& out) const noexcept
@@ -3448,9 +3515,29 @@ bool FreakiePieEditor::floorHit (Point<float> s, Vec3& out) const noexcept
     return true;
 }
 
+void FreakiePieEditor::zoomAt (Point<float> at, float factor)
+{
+    const float z0 = viewZoom, z1 = jlimit (0.7f, 2.6f, viewZoom * factor);
+    if (z1 == z0) return;
+    // the point under the cursor stays under it
+    viewPan = at - sphereCentre - (at - sphereCentre - viewPan) * (z1 / z0);
+    viewZoom = z1;
+    const float lim = sphereR * viewZoom;
+    viewPan = { jlimit (-lim, lim, viewPan.x), jlimit (-lim, lim, viewPan.y) };
+    if (viewZoom <= 1.0001f) viewPan = viewPan * 0.5f;   // (zoomed back out, it drifts home)
+    drawnOrder.clear();
+}
+
+void FreakiePieEditor::resetView()
+{
+    viewZoom = 1.0f; viewPan = {};
+    viewYaw = 0.0f; viewPitch = 0.36f;
+    confetti (sphereCentre, 10);
+}
+
 float FreakiePieEditor::sphereScreenRadius() const noexcept
 {
-    return sphereR * camDist / std::sqrt (camDist * camDist - sphereR * sphereR);   // the outline of a ball seen in perspective
+    return viewZoom * sphereR * camDist / std::sqrt (camDist * camDist - sphereR * sphereR);   // the outline of a ball seen in perspective
 }
 
 // the order runs round the floor from ahead-left, behind you, to ahead-right (the front is left open)
@@ -3500,8 +3587,11 @@ void FreakiePieEditor::step (float h)
         {
             // new: it comes in where it appeared (or, born outside the sphere, just above its bow)
             const auto& a = anchors[b->anchor];
-            b->w = insideSphere (b->pos) ? unproject (b->pos, 0.0f)
-                                         : a.w + Vec3 { rnd.nextFloat() * 30.0f - 15.0f, rnd.nextFloat() * 30.0f - 15.0f, 30.0f + rnd.nextFloat() * 30.0f };
+            const bool outside = ! insideSphere (b->pos);
+            b->w = ! outside ? unproject (b->pos, 0.0f)
+                             : a.w + Vec3 { rnd.nextFloat() * 30.0f - 15.0f, rnd.nextFloat() * 30.0f - 15.0f, 60.0f + rnd.nextFloat() * 40.0f };
+            // let go outside the sphere (at a pump, at the store): it flies in from there, so you can see where it goes
+            if (outside) { b->flyIn = 0.0f; b->flyFrom = b->pos; }
             b->w = Flight3::clamp (b->w, R - b->collisionRadius() * balloonScale);
             b->wv = {};
             b->placed3d = true;
@@ -3614,6 +3704,17 @@ void FreakiePieEditor::step (float h)
         b->vel = (ahead - np) * 100.0f;
         b->lastVel2 = b->vel;
         b->scale = k * balloonScale;
+        if (b->flyIn < 1.0f)
+        {
+            // on its way in: an arc from where it was let go, growing to its size in the sphere, drawn in front
+            b->flyIn = jmin (1.0f, b->flyIn + h / 0.9f);
+            const float u = b->flyIn, e = u * u * (3.0f - 2.0f * u);
+            b->pos = b->flyFrom + (np - b->flyFrom) * e + Point<float> (0.0f, -110.0f * std::sin (u * MathConstants<float>::pi));
+            b->scale = (0.75f + (b->scale - 0.75f) * e);
+            b->depth = 1.0e5f;
+            b->vel = {};
+            b->lastVel2 = b->vel;
+        }
         const auto d = b->pos - anchors[b->anchor].pos;
         const float dist = (b->w - anchors[b->anchor].w).length();
         const bool taut = dist > (b->stringLength + 30.0f) * stringScale;
@@ -3825,7 +3926,12 @@ void FreakiePieEditor::timerCallback()
             content.removeChildComponent (floaters[i]);
             floaters.remove (i);
         }
-    for (auto* b : floaters) { b->place(); b->repaint(); }
+    for (auto* b : floaters)
+    {
+        b->place();
+        const auto look = b->lookKey();
+        if (look == -1 || look != b->lastLook) { b->lastLook = look; b->repaint(); }
+    }
     grainStep (dt);
     depthSort();
     if (++meterFrame % 3 == 0) meterStep();
@@ -4614,42 +4720,19 @@ void FreakiePieEditor::drawPump (Graphics& g, const Pump& p, bool sound) const
     ignoreUnused (sound);
 }
 
+int mellyloonDbgFrames = 0;   // (counted by the tests, to measure the frame rate)
+
 void FreakiePieEditor::paintContent (Graphics& g)
 {
+    ++mellyloonDbgFrames;
     const auto full = Rectangle<float> (0, 0, (float) designW, (float) designH);
 
     applyTheme();
 
-    // the background: the preset's colours, its picture (cross-fading from the last one), and a veil
-    // in the picture's own deep colour so the balloons stay easy to see
-    g.setGradientFill (ColourGradient (theme.deep, 0, 0, theme.deep.brighter (0.45f), 0, full.getBottom(), false));
-    g.fillRect (full);
-    {
-        const float u = ease (bgFade);
-        auto picture = [&] (int bg, float alpha)
-        {
-            const auto& img = background (bg);
-            if (! img.isValid() || alpha <= 0.001f) return;
-            g.setOpacity (alpha);
-            g.drawImage (img, full, RectanglePlacement::fillDestination);
-            g.setOpacity (1.0f);
-        };
-        if (bgFrom != bgTo) picture (bgFrom, 1.0f - u);
-        picture (bgTo, bgFrom == bgTo ? 1.0f : u);
-        const float veil = (bgTo >= 0 ? u : 0.0f) + (bgFrom >= 0 && bgFrom != bgTo ? 1.0f - u : 0.0f);
-        if (veil > 0.0f)
-        {
-            g.setGradientFill (ColourGradient (theme.deep.withAlpha (0.42f * veil), 0, 0, theme.deep.withAlpha (0.66f * veil), 0, full.getBottom(), false));
-            g.fillRect (full);
-        }
-    }
-
-
-    g.setGradientFill (ColourGradient (palette::dustyPink.withAlpha (0.07f), designW * 0.5f, designH * 0.6f,
-                                       palette::dustyPink.withAlpha (0.0f), designW * 0.5f + 520.0f, designH * 0.6f, true));
-    g.fillRect (full);
-    g.setGradientFill (ColourGradient (Colour (0x00000000), 0, designH - 70.0f, Colour (0x55000000), 0, (float) designH, false));
-    g.fillRect (full.withTop (designH - 70.0f));
+    // the room behind the sphere: its picture, and (zoomed in) everything in it, blurred and darker the
+    // further you zoom, so the balloons stand out; drawn once and reused until it changes
+    const float blur = jlimit (0.0f, 1.0f, (viewZoom - 1.0f) / 0.8f);
+    drawRoom (g, full, blur);
 
     // (no title: the weather bar sits where it was)
 
@@ -4683,64 +4766,8 @@ void FreakiePieEditor::paintContent (Graphics& g)
         g.fillRect (full);
     }
 
+    if (blur <= 0.0f) drawRoomItems (g);   // (zoomed in, they're in the blurred room)
     drawSphereBack (g);
-    drawEnergyMap (g);
-    drawJar (g);
-    drawTank (g);
-    drawPump (g, popPump, false);
-    drawPump (g, soundPump, true);
-
-    // the balloons on the pumps
-    if (popPump.size > 0.0f || popPump.holding)
-        lnf.drawBalloon (g, pumpBalloonShape (popPump), popPump.hue,
-                         popPump.holding ? semisText (proc.balloonFX.toneSemis.load()) : String(), "", false, 0.0f, 0.0f, 0.0f, 11.0f);
-    if (soundPump.slot >= 0)
-    {
-        const float murk = (1.0f - std::pow (soundPump.size, 0.85f)) * 0.85f;   // the filter opens as it fills
-        const auto sh = pumpBalloonShape (soundPump);
-        lnf.drawBalloon (g, sh, soundPump.hue, semisText (nextSemis), "", false, 0.0f, 0.0f, murk, 12.0f);
-        g.setColour (Colour (0xffff4a4a).withAlpha (0.6f + 0.4f * std::sin ((float) clock * 8.0f)));
-        g.fillEllipse (Rectangle<float> (7.0f, 7.0f).withCentre ({ sh.cx + sh.rx * 0.55f, sh.cy - sh.ry * 0.55f }));
-    }
-    // next pitch
-    {
-        const auto r = nextBadge;
-        g.setColour (Colours::black.withAlpha (0.35f));
-        g.fillRoundedRectangle (r, 10.0f);
-        g.setColour (balloonColours (balloonTeal).fill.withAlpha (0.6f));
-        g.drawRoundedRectangle (r, 10.0f, 1.0f);
-        g.setFont (SadLookAndFeel::uiFont (10.5f, true));
-        g.setColour (palette::blush.withAlpha (0.9f));
-        g.drawText ("next " + semisText (nextSemis), r, Justification::centred);
-        if (fullFlash > 0.0f)
-        {
-            g.setColour (Colour (0xffffb0c8).withAlpha (fullFlash));
-            g.drawText ("6 max: pop one", r.translated (0.0f, -24.0f).withWidth (110.0f), Justification::centredLeft);
-        }
-    }
-
-    // puddle + ripples
-    if (puddle > 0.01f)
-    {
-        const auto& bow = anchors[0].pos;
-        const float w = 60.0f + 420.0f * puddle, ht = 8.0f + 10.0f * puddle;
-        auto pr = Rectangle<float> (w, ht).withCentre ({ bow.x, (float) designH - 6.0f });
-        g.setColour (Colour (0xff6f8fc8).withAlpha (0.35f));
-        g.fillEllipse (pr);
-        g.setColour (Colour (0xffcfe4ff).withAlpha (0.45f));
-        g.drawEllipse (pr, 1.2f);
-        g.fillEllipse (pr.withSizeKeepingCentre (w * 0.3f, 2.0f).translated (-w * 0.15f, -ht * 0.2f));
-    }
-    for (auto& r : ripples)
-    {
-        const float a = 1.0f - r.age;
-        g.setColour (Colour (0xffcfe4ff).withAlpha (0.5f * a));
-        g.drawEllipse (Rectangle<float> (6.0f + 26.0f * r.age, 2.0f + 6.0f * r.age).withCentre (r.p), 1.0f);
-    }
-
-    drawSnowbank (g);
-    // (no shelf any more: the order is changed with the dice, and reads left to right)
-
     // strings: thin satin ribbon; taut ones are straight, slack ones droop to the floor
     for (auto* b : floaters)
     {
@@ -4774,48 +4801,6 @@ void FreakiePieEditor::paintContent (Graphics& g)
         else drawBow (g, a.pos, a.hue);
     }
 
-    // the pincushion (a little tomato)
-    if (pin != nullptr)
-    {
-        const auto c = pin->home + Point<float> (-14.0f, 30.0f);
-        auto body = Rectangle<float> (40.0f, 26.0f).withCentre (c);
-        g.setColour (Colours::black.withAlpha (0.35f));
-        g.fillEllipse (body.translated (0.0f, 5.0f).withSizeKeepingCentre (44.0f, 10.0f));
-        g.setGradientFill (ColourGradient (Colour (0xffff6b6b), body.getX() + 10.0f, body.getY() + 4.0f, Colour (0xffa0182c), body.getRight(), body.getBottom(), true));
-        g.fillEllipse (body);
-        g.setColour (Colour (0xff7a1022).withAlpha (0.6f));
-        for (int i = -1; i <= 1; ++i)
-            g.drawLine (c.x + (float) i * 9.0f, body.getY() + 3.0f, c.x + (float) i * 11.0f, body.getBottom() - 3.0f, 1.0f);
-        g.setColour (Colours::white.withAlpha (0.55f));
-        g.fillEllipse (body.getX() + 8.0f, body.getY() + 4.0f, 9.0f, 5.0f);
-        Path leaf;
-        leaf.addStar (c.translated (0.0f, -12.0f), 5, 3.0f, 9.0f, 0.3f);
-        g.setColour (Colour (0xff3fae5a));
-        g.fillPath (leaf);
-        g.setFont (SadLookAndFeel::uiFont (10.0f, true));
-        g.setColour (palette::blush.withAlpha (0.7f));
-        g.drawText ("pin", Rectangle<float> (60.0f, 12.0f).withCentre ({ c.x, body.getBottom() + 9.0f }), Justification::centred);
-    }
-
-    drawPinkie (g);
-
-    // the chalkboard, standing on the classroom floor (click it to draw a grain shape)
-    if (chalkboard != nullptr && ! chalkboard->isVisible())
-    {
-        chalkboard->drawEasel (g, chalkboard->restArea(), 0.0f);
-        g.setFont (Font (FontOptions ("Chalkboard SE", 9.0f, Font::plain)));
-        g.setColour (palette::blush.withAlpha (0.6f));
-        g.drawText ("grains + eq", chalkboard->restArea().withY (chalkboard->restArea().getBottom() - 2.0f).withHeight (12.0f).expanded (20.0f, 0.0f),
-                    Justification::centred);
-    }
-
-    // the switches: round toy tokens
-    for (auto* pl : pills) drawToken (g, *pl);
-
-    drawStoreSign (g);
-    drawHelpButton (g);
-    drawResetButton (g);
-    drawPopsButton (g);
 
     // (the weather switches are drawn by the weather row, on its own layer above the balloons)
     if (false)
@@ -5861,6 +5846,7 @@ void FreakiePieEditor::addGrain (const Vec3* at)
     const int n = grainCount();
     if (n >= FreakiePieProcessor::kGrains) { confetti (jarArea.getCentre(), 6); return; }
     if (at != nullptr) proc.setGrainHome (n, *at);
+    if (at == nullptr) grainDropAt = jarArea.getCentre();   // (clicked: it flies out of the jar; dropped: from where you let go)
     if (grainsAtt != nullptr) grainsAtt->setValueAsCompleteGesture ((float) (n + 1));
     confetti (at != nullptr ? project (*at * sphereR) : jarArea.getCentre(), 14);
     noteActivity();
@@ -5896,12 +5882,21 @@ void FreakiePieEditor::grainStep (float dt)
             continue;
         }
         const auto& v = proc.grainView[(size_t) i];
+        const bool wasShown = m->isVisible();
         m->presence += ((i < n ? jmax (0.3f, v.presence.load()) : 0.0f) - m->presence) * jmin (1.0f, dt * 6.0f);
         const bool show = m->presence > 0.02f;
+        if (show && ! wasShown) { m->flyIn = 0.0f; m->flyFrom = grainDropAt; }   // a new grain: out of the jar and into the sphere
         if (m->isVisible() != show) m->setVisible (show);
         if (! show) continue;
         const Vec3 w = Vec3 { v.x.load(), v.y.load(), v.z.load() } * sphereR;
         m->pos = project (w, &m->scale, &m->depth);
+        if (m->flyIn < 1.0f)
+        {
+            m->flyIn = jmin (1.0f, m->flyIn + dt / 0.8f);
+            const float u = m->flyIn, e = u * u * (3.0f - 2.0f * u);
+            m->pos = m->flyFrom + (m->pos - m->flyFrom) * e + Point<float> (0.0f, -90.0f * std::sin (u * MathConstants<float>::pi));
+            m->depth = 1.0e5f;
+        }
         m->glow += (jlimit (0.0f, 1.0f, v.level.load() * 6.0f) - m->glow) * jmin (1.0f, dt * 10.0f);
         m->weather = v.weather.load();
         m->frozen = v.frozen.load();
@@ -6079,6 +6074,7 @@ void FreakiePieEditor::meterStep()
     for (size_t i = 0; i < meterDirs.size(); ++i) meterDb[i] += ((now[i] - ref) - meterDb[i]) * 0.5f;
     for (size_t i = 0; i < mapDirs.size(); ++i)
         mapDb[i] = mapDirs[i].length() < 0.5f ? -200.0f : 10.0f * std::log10 (proc.energy.levelAt (mapDirs[i]) + 1.0e-12f) - ref;
+    renderSkin();
 }
 
 void FreakiePieEditor::drawEnergySkin (Graphics& g, bool front) const
@@ -6149,46 +6145,116 @@ void FreakiePieEditor::drawEnergyMap (Graphics& g) const
 //==============================================================================
 // The sphere itself
 //==============================================================================
+template <typename Fn>
+void FreakiePieEditor::drawCached (Graphics& g, Layer& L, Rectangle<float> area, std::vector<float> key, Fn&& paintFn) const
+{
+    const float phys = jmax (0.25f, g.getInternalContext().getPhysicalPixelScaleFactor());
+    const float q = std::ceil (phys * 4.0f) / 4.0f;
+    if (L.img.isNull() || L.key != key || L.scale != q || L.area != area)
+    {
+        const int w = jmax (1, roundToInt (area.getWidth() * q)), h = jmax (1, roundToInt (area.getHeight() * q));
+        if (L.img.getWidth() != w || L.img.getHeight() != h) L.img = Image (Image::ARGB, w, h, true, SoftwareImageType());
+        else L.img.clear (L.img.getBounds());
+        Graphics ig (L.img);
+        ig.addTransform (AffineTransform::translation (-area.getX(), -area.getY()).scaled (q));
+        paintFn (ig);
+        L.key = std::move (key); L.scale = q; L.area = area;
+    }
+    g.drawImageTransformed (L.img, AffineTransform::scale (area.getWidth() / (float) L.img.getWidth(), area.getHeight() / (float) L.img.getHeight())
+                                       .translated (area.getX(), area.getY()), false);
+}
+
+std::vector<float> FreakiePieEditor::viewKey() const
+{
+    const auto a = (uint32) theme.accent.getARGB(), d = (uint32) theme.deep.getARGB();
+    return { viewYaw, viewPitch, viewZoom, viewPan.x, viewPan.y, (float) (a & 0xffffu), (float) (a >> 16), (float) (d & 0xffffu), (float) (d >> 16) };
+}
+
+Rectangle<float> FreakiePieEditor::sphereArea() const
+{
+    const float Rs = sphereScreenRadius() + 24.0f;
+    return Rectangle<float> (2.0f * Rs, 2.0f * Rs).withCentre (viewCentre()).getIntersection ({ 0.0f, 0.0f, (float) designW, (float) designH });
+}
+
+// the energy on the glass, stamped into two images (behind and in front) a few times a second
+void FreakiePieEditor::renderSkin()
+{
+    skinArea = sphereArea();
+    const int w = jmax (1, (int) skinArea.getWidth()), h = jmax (1, (int) skinArea.getHeight());
+    for (auto* im : { &skinBack, &skinFront })
+    {
+        if (im->getWidth() != w || im->getHeight() != h) *im = Image (Image::ARGB, w, h, true, SoftwareImageType());
+        else im->clear (im->getBounds());
+    }
+    Image::BitmapData bb (skinBack, Image::BitmapData::readWrite), bf (skinFront, Image::BitmapData::readWrite);
+    for (size_t i = 0; i < meterDirs.size(); ++i)
+    {
+        if (meterDb[i] < -14.0f) continue;   // only the loud places
+        float k, d;
+        const auto p = project (meterDirs[i] * sphereR, &k, &d) - skinArea.getPosition();
+        const auto c = meterColour (meterDb[i]);
+        const float a = jlimit (0.0f, 1.0f, (meterDb[i] + 14.0f) / 14.0f) * (d > 0.0f ? 0.30f : 0.45f);
+        auto& bd = d > 0.0f ? bf : bb;
+        const float r = 15.0f * k, inv = 1.0f / r;
+        const int x0 = jmax (0, (int) (p.x - r)), x1 = jmin (bd.width - 1, (int) (p.x + r) + 1);
+        const int y0 = jmax (0, (int) (p.y - r)), y1 = jmin (bd.height - 1, (int) (p.y + r) + 1);
+        const PixelARGB base (c.withAlpha (1.0f).getPixelARGB());
+        for (int y = y0; y <= y1; ++y)
+        {
+            const float dy = ((float) y + 0.5f - p.y) * inv;
+            auto* q = reinterpret_cast<PixelARGB*> (bd.getLinePointer (y)) + x0;
+            for (int x = x0; x <= x1; ++x, ++q)
+            {
+                const float dx = ((float) x + 0.5f - p.x) * inv, d2 = dx * dx + dy * dy;
+                if (d2 >= 1.0f) continue;
+                const int al = (int) (255.0f * a * (1.0f - std::sqrt (d2)));
+                if (al <= 0) continue;
+                PixelARGB src (base);
+                src.multiplyAlpha (jmin (al, 255));
+                q->blend (src);
+            }
+        }
+    }
+}
+
 void FreakiePieEditor::drawSphereBack (Graphics& g) const
 {
-    const float Rs = sphereScreenRadius();
-    const auto disc = Rectangle<float> (2.0f * Rs, 2.0f * Rs).withCentre (sphereCentre);
-    // the glass, a little milky inside, tinted by the place
+    drawCached (g, backLayer, sphereArea(), viewKey(), [this] (Graphics& gg)
     {
-        ColourGradient fill (theme.accent.withAlpha (0.10f), sphereCentre.x - Rs * 0.3f, sphereCentre.y - Rs * 0.35f,
-                             theme.deep.withAlpha (0.38f), sphereCentre.x + Rs, sphereCentre.y + Rs, true);
-        g.setGradientFill (fill);
-        g.fillEllipse (disc);
-    }
-    // the grid behind (the far half)
-    auto curve = [&] (std::function<Vec3 (float)> at, bool front, float alpha, float width)
-    {
-        Path p;
-        bool drawing = false;
-        for (int i = 0; i <= 96; ++i)
+        const float Rs = sphereScreenRadius();
+        const auto C = viewCentre();
+        const auto disc = Rectangle<float> (2.0f * Rs, 2.0f * Rs).withCentre (C);
+        // the glass, a little milky inside, tinted by the place
+        ColourGradient fill (theme.accent.withAlpha (0.10f), C.x - Rs * 0.3f, C.y - Rs * 0.35f,
+                             theme.deep.withAlpha (0.38f), C.x + Rs, C.y + Rs, true);
+        gg.setGradientFill (fill);
+        gg.fillEllipse (disc);
+        // the grid behind (the far half)
+        auto curve = [&] (std::function<Vec3 (float)> at, float alpha, float width)
         {
-            float d;
-            const auto q = project (at ((float) i / 96.0f) * sphereR, nullptr, &d);
-            if ((d > 0.0f) == front) { if (! drawing) p.startNewSubPath (q); else p.lineTo (q); drawing = true; }
-            else drawing = false;
+            Path p;
+            bool drawing = false;
+            for (int i = 0; i <= 96; ++i)
+            {
+                float d;
+                const auto q = project (at ((float) i / 96.0f) * sphereR, nullptr, &d);
+                if (d <= 0.0f) { if (! drawing) p.startNewSubPath (q); else p.lineTo (q); drawing = true; }
+                else drawing = false;
+            }
+            gg.setColour (palette::blush.withAlpha (alpha));
+            gg.strokePath (p, PathStrokeType (width));
+        };
+        for (float el : { -60.0f, -30.0f, 0.0f, 30.0f, 60.0f })
+        {
+            const float e = degreesToRadians (el);
+            curve ([e] (float u) { return fp::ambi::fromAzEl (u * MathConstants<float>::twoPi, e); }, el == 0.0f ? 0.22f : 0.12f, el == 0.0f ? 1.2f : 0.8f);
         }
-        g.setColour (palette::blush.withAlpha (alpha));
-        g.strokePath (p, PathStrokeType (width));
-    };
-    for (float el : { -60.0f, -30.0f, 0.0f, 30.0f, 60.0f })
-    {
-        const float e = degreesToRadians (el);
-        curve ([e] (float u) { return fp::ambi::fromAzEl (u * MathConstants<float>::twoPi, e); }, false, el == 0.0f ? 0.22f : 0.12f, el == 0.0f ? 1.2f : 0.8f);
-    }
-    for (int k = 0; k < 6; ++k)
-    {
-        const float az = (float) k * MathConstants<float>::pi / 6.0f;
-        curve ([az] (float u) { return fp::ambi::fromAzEl (az, (u - 0.5f) * MathConstants<float>::twoPi); }, false, 0.10f, 0.8f);
-    }
-    drawEnergySkin (g, false);
-
-    // the floor: a round lawn the bows stand on, with the order's ring round it
-    {
+        for (int k = 0; k < 6; ++k)
+        {
+            const float az = (float) k * MathConstants<float>::pi / 6.0f;
+            curve ([az] (float u) { return fp::ambi::fromAzEl (az, (u - 0.5f) * MathConstants<float>::twoPi); }, 0.10f, 0.8f);
+        }
+        // the floor: a round lawn the bows stand on, with the order's ring round it
         const float fr = std::sqrt (sphereR * sphereR - floorZ * floorZ);
         Path lawn, ring;
         for (int i = 0; i <= 72; ++i)
@@ -6198,10 +6264,10 @@ void FreakiePieEditor::drawSphereBack (Graphics& g) const
             if (i == 0) lawn.startNewSubPath (q); else lawn.lineTo (q);
         }
         lawn.closeSubPath();
-        g.setColour (theme.accent.withAlpha (0.16f).interpolatedWith (Colour (0xff4f8a4a), 0.5f).withAlpha (0.28f));
-        g.fillPath (lawn);
-        g.setColour (palette::blush.withAlpha (0.25f));
-        g.strokePath (lawn, PathStrokeType (1.0f));
+        gg.setColour (theme.accent.withAlpha (0.16f).interpolatedWith (Colour (0xff4f8a4a), 0.5f).withAlpha (0.28f));
+        gg.fillPath (lawn);
+        gg.setColour (palette::blush.withAlpha (0.25f));
+        gg.strokePath (lawn, PathStrokeType (1.0f));
         for (int i = 0; i <= 64; ++i)
         {
             const float x = shelfLeft + (shelfRight - shelfLeft) * (float) i / 64.0f;
@@ -6211,19 +6277,21 @@ void FreakiePieEditor::drawSphereBack (Graphics& g) const
         Path dashed;
         const float dash[] = { 4.0f, 5.0f };
         PathStrokeType (1.2f).createDashedStroke (dashed, ring, dash, 2);
-        g.setColour (Colour (0xffc48b52).withAlpha (0.7f));
-        g.fillPath (dashed);
-        // in -> 1, 2, 3 ... -> out, round the ring
-        g.setFont (SadLookAndFeel::uiFont (9.0f, true));
-        g.setColour (palette::blush.withAlpha (0.8f));
-        g.drawText ("in", Rectangle<float> (30.0f, 12.0f).withCentre (project (ringPoint (shelfLeft - 30.0f)).translated (0.0f, 12.0f)), Justification::centred);
-        g.drawText ("out", Rectangle<float> (30.0f, 12.0f).withCentre (project (ringPoint (shelfRight + 30.0f)).translated (0.0f, 12.0f)), Justification::centred);
-        const auto items = shelfItems();
-        for (size_t i = 0; i < items.size(); ++i)
-        {
-            const auto& a = anchors[anchorOfSlot (items[i])];
-            g.drawText (String ((int) i + 1), Rectangle<float> (16.0f, 10.0f).withCentre (a.pos.translated (0.0f, 20.0f * a.scale)), Justification::centred);
-        }
+        gg.setColour (Colour (0xffc48b52).withAlpha (0.7f));
+        gg.fillPath (dashed);
+    });
+    if (skinBack.isValid()) g.drawImageAt (skinBack, (int) skinArea.getX(), (int) skinArea.getY());
+
+    // in -> 1, 2, 3 ... -> out, round the ring
+    g.setFont (SadLookAndFeel::uiFont (9.0f, true));
+    g.setColour (palette::blush.withAlpha (0.8f));
+    g.drawText ("in", Rectangle<float> (30.0f, 12.0f).withCentre (project (ringPoint (shelfLeft - 30.0f)).translated (0.0f, 12.0f)), Justification::centred);
+    g.drawText ("out", Rectangle<float> (30.0f, 12.0f).withCentre (project (ringPoint (shelfRight + 30.0f)).translated (0.0f, 12.0f)), Justification::centred);
+    const auto items = shelfItems();
+    for (size_t i = 0; i < items.size(); ++i)
+    {
+        const auto& a = anchors[anchorOfSlot (items[i])];
+        g.drawText (String ((int) i + 1), Rectangle<float> (16.0f, 10.0f).withCentre (a.pos.translated (0.0f, 20.0f * a.scale)), Justification::centred);
     }
     drawListener (g);
 }
@@ -6257,40 +6325,50 @@ void FreakiePieEditor::drawListener (Graphics& g) const
 
 void FreakiePieEditor::drawSphereFront (Graphics& g) const
 {
-    const float Rs = sphereScreenRadius();
-    const auto disc = Rectangle<float> (2.0f * Rs, 2.0f * Rs).withCentre (sphereCentre);
-    drawEnergySkin (g, true);
-    auto curve = [&] (std::function<Vec3 (float)> at, float alpha)
+    if (skinFront.isValid()) g.drawImageAt (skinFront, (int) skinArea.getX(), (int) skinArea.getY());
+    drawCached (g, frontLayer, sphereArea(), viewKey(), [this] (Graphics& gg)
     {
-        Path p;
-        bool drawing = false;
-        for (int i = 0; i <= 96; ++i)
+        const float Rs = sphereScreenRadius();
+        const auto C = viewCentre();
+        const auto disc = Rectangle<float> (2.0f * Rs, 2.0f * Rs).withCentre (C);
+        auto curve = [&] (std::function<Vec3 (float)> at, float alpha)
         {
-            float d;
-            const auto q = project (at ((float) i / 96.0f) * sphereR, nullptr, &d);
-            if (d > 0.0f) { if (! drawing) p.startNewSubPath (q); else p.lineTo (q); drawing = true; }
-            else drawing = false;
+            Path p;
+            bool drawing = false;
+            for (int i = 0; i <= 96; ++i)
+            {
+                float d;
+                const auto q = project (at ((float) i / 96.0f) * sphereR, nullptr, &d);
+                if (d > 0.0f) { if (! drawing) p.startNewSubPath (q); else p.lineTo (q); drawing = true; }
+                else drawing = false;
+            }
+            gg.setColour (Colours::white.withAlpha (alpha));
+            gg.strokePath (p, PathStrokeType (0.8f));
+        };
+        curve ([] (float u) { return fp::ambi::fromAzEl (u * MathConstants<float>::twoPi, 0.0f); }, 0.16f);
+        for (int k = 0; k < 6; ++k)
+        {
+            const float az = (float) k * MathConstants<float>::pi / 6.0f;
+            curve ([az] (float u) { return fp::ambi::fromAzEl (az, (u - 0.5f) * MathConstants<float>::twoPi); }, 0.06f);
         }
-        g.setColour (Colours::white.withAlpha (alpha));
-        g.strokePath (p, PathStrokeType (0.8f));
-    };
-    curve ([] (float u) { return fp::ambi::fromAzEl (u * MathConstants<float>::twoPi, 0.0f); }, 0.16f);
-    for (int k = 0; k < 6; ++k)
+        // the rim and the shine on the glass
+        gg.setColour (Colours::white.withAlpha (0.35f));
+        gg.drawEllipse (disc, 1.6f);
+        gg.setColour (theme.accent.withAlpha (0.25f));
+        gg.drawEllipse (disc.reduced (3.0f), 3.0f);
+        Path shine;
+        shine.addCentredArc (C.x, C.y, Rs * 0.88f, Rs * 0.88f, 0.0f, -2.2f, -1.1f, true);
+        gg.setColour (Colours::white.withAlpha (0.28f));
+        gg.strokePath (shine, PathStrokeType (7.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        gg.setColour (Colours::white.withAlpha (0.5f));
+        gg.fillEllipse (Rectangle<float> (14.0f, 9.0f).withCentre (C + Point<float> (-Rs * 0.48f, -Rs * 0.66f)));
+    });
+    if (std::abs (viewZoom - 1.0f) > 0.02f)
     {
-        const float az = (float) k * MathConstants<float>::pi / 6.0f;
-        curve ([az] (float u) { return fp::ambi::fromAzEl (az, (u - 0.5f) * MathConstants<float>::twoPi); }, 0.06f);
+        g.setFont (SadLookAndFeel::uiFont (10.0f, true));
+        g.setColour (palette::blush.withAlpha (0.75f));
+        g.drawText ("zoom " + String (viewZoom, 1) + "x   double-click the glass to set it back", Rectangle<float> (0.0f, (float) designH - 18.0f, (float) designW, 14.0f), Justification::centred);
     }
-    // the rim and the shine on the glass
-    g.setColour (Colours::white.withAlpha (0.35f));
-    g.drawEllipse (disc, 1.6f);
-    g.setColour (theme.accent.withAlpha (0.25f));
-    g.drawEllipse (disc.reduced (3.0f), 3.0f);
-    Path shine;
-    shine.addCentredArc (sphereCentre.x, sphereCentre.y, Rs * 0.88f, Rs * 0.88f, 0.0f, -2.2f, -1.1f, true);
-    g.setColour (Colours::white.withAlpha (0.28f));
-    g.strokePath (shine, PathStrokeType (7.0f, PathStrokeType::curved, PathStrokeType::rounded));
-    g.setColour (Colours::white.withAlpha (0.5f));
-    g.fillEllipse (Rectangle<float> (14.0f, 9.0f).withCentre (sphereCentre + Point<float> (-Rs * 0.48f, -Rs * 0.66f)));
 }
 
 // the jar of grains: little bouquets waiting to be dropped into the sphere
@@ -6324,4 +6402,202 @@ void FreakiePieEditor::drawJar (Graphics& g) const
     g.drawText (String (n) + (n == 1 ? " grain" : " grains") + (scatter ? ", scattered" : ""), r.withY (r.getBottom() + 4.0f).withHeight (13.0f).expanded (30.0f, 0.0f), Justification::centred);
     if (jarDragging && ! jarArea.contains (jarDragAt))
         lnf.drawTinyBalloon (g, jarDragAt, 7.0f, n % numHues);   // the one you're carrying
+}
+
+// everything standing in the room round the sphere: the map, the jar, the canister, the pumps, Pinkie,
+// the chalkboard, the tokens and the signs
+void FreakiePieEditor::drawRoomItems (Graphics& g)
+{
+    drawEnergyMap (g);
+    drawJar (g);
+    drawTank (g);
+    drawPump (g, popPump, false);
+    drawPump (g, soundPump, true);
+
+    // the balloons on the pumps
+    if (popPump.size > 0.0f || popPump.holding)
+        lnf.drawBalloon (g, pumpBalloonShape (popPump), popPump.hue,
+                         popPump.holding ? semisText (proc.balloonFX.toneSemis.load()) : String(), "", false, 0.0f, 0.0f, 0.0f, 11.0f);
+    if (soundPump.slot >= 0)
+    {
+        const float murk = (1.0f - std::pow (soundPump.size, 0.85f)) * 0.85f;   // the filter opens as it fills
+        const auto sh = pumpBalloonShape (soundPump);
+        lnf.drawBalloon (g, sh, soundPump.hue, semisText (nextSemis), "", false, 0.0f, 0.0f, murk, 12.0f);
+        g.setColour (Colour (0xffff4a4a).withAlpha (0.6f + 0.4f * std::sin ((float) clock * 8.0f)));
+        g.fillEllipse (Rectangle<float> (7.0f, 7.0f).withCentre ({ sh.cx + sh.rx * 0.55f, sh.cy - sh.ry * 0.55f }));
+    }
+    // next pitch
+    {
+        const auto r = nextBadge;
+        g.setColour (Colours::black.withAlpha (0.35f));
+        g.fillRoundedRectangle (r, 10.0f);
+        g.setColour (balloonColours (balloonTeal).fill.withAlpha (0.6f));
+        g.drawRoundedRectangle (r, 10.0f, 1.0f);
+        g.setFont (SadLookAndFeel::uiFont (10.5f, true));
+        g.setColour (palette::blush.withAlpha (0.9f));
+        g.drawText ("next " + semisText (nextSemis), r, Justification::centred);
+        if (fullFlash > 0.0f)
+        {
+            g.setColour (Colour (0xffffb0c8).withAlpha (fullFlash));
+            g.drawText ("6 max: pop one", r.translated (0.0f, -24.0f).withWidth (110.0f), Justification::centredLeft);
+        }
+    }
+
+    // puddle + ripples
+    if (puddle > 0.01f)
+    {
+        const auto& bow = anchors[0].pos;
+        const float w = 60.0f + 420.0f * puddle, ht = 8.0f + 10.0f * puddle;
+        auto pr = Rectangle<float> (w, ht).withCentre ({ bow.x, (float) designH - 6.0f });
+        g.setColour (Colour (0xff6f8fc8).withAlpha (0.35f));
+        g.fillEllipse (pr);
+        g.setColour (Colour (0xffcfe4ff).withAlpha (0.45f));
+        g.drawEllipse (pr, 1.2f);
+        g.fillEllipse (pr.withSizeKeepingCentre (w * 0.3f, 2.0f).translated (-w * 0.15f, -ht * 0.2f));
+    }
+    for (auto& r : ripples)
+    {
+        const float a = 1.0f - r.age;
+        g.setColour (Colour (0xffcfe4ff).withAlpha (0.5f * a));
+        g.drawEllipse (Rectangle<float> (6.0f + 26.0f * r.age, 2.0f + 6.0f * r.age).withCentre (r.p), 1.0f);
+    }
+
+    drawSnowbank (g);
+    // (no shelf any more: the order is changed with the dice, and reads left to right)
+
+    // the pincushion (a little tomato)
+    if (pin != nullptr)
+    {
+        const auto c = pin->home + Point<float> (-14.0f, 30.0f);
+        auto body = Rectangle<float> (40.0f, 26.0f).withCentre (c);
+        g.setColour (Colours::black.withAlpha (0.35f));
+        g.fillEllipse (body.translated (0.0f, 5.0f).withSizeKeepingCentre (44.0f, 10.0f));
+        g.setGradientFill (ColourGradient (Colour (0xffff6b6b), body.getX() + 10.0f, body.getY() + 4.0f, Colour (0xffa0182c), body.getRight(), body.getBottom(), true));
+        g.fillEllipse (body);
+        g.setColour (Colour (0xff7a1022).withAlpha (0.6f));
+        for (int i = -1; i <= 1; ++i)
+            g.drawLine (c.x + (float) i * 9.0f, body.getY() + 3.0f, c.x + (float) i * 11.0f, body.getBottom() - 3.0f, 1.0f);
+        g.setColour (Colours::white.withAlpha (0.55f));
+        g.fillEllipse (body.getX() + 8.0f, body.getY() + 4.0f, 9.0f, 5.0f);
+        Path leaf;
+        leaf.addStar (c.translated (0.0f, -12.0f), 5, 3.0f, 9.0f, 0.3f);
+        g.setColour (Colour (0xff3fae5a));
+        g.fillPath (leaf);
+        g.setFont (SadLookAndFeel::uiFont (10.0f, true));
+        g.setColour (palette::blush.withAlpha (0.7f));
+        g.drawText ("pin", Rectangle<float> (60.0f, 12.0f).withCentre ({ c.x, body.getBottom() + 9.0f }), Justification::centred);
+    }
+
+    drawPinkie (g);
+
+    // the chalkboard, standing on the classroom floor (click it to draw a grain shape)
+    if (chalkboard != nullptr && ! chalkboard->isVisible())
+    {
+        chalkboard->drawEasel (g, chalkboard->restArea(), 0.0f);
+        g.setFont (Font (FontOptions ("Chalkboard SE", 9.0f, Font::plain)));
+        g.setColour (palette::blush.withAlpha (0.6f));
+        g.drawText ("grains + eq", chalkboard->restArea().withY (chalkboard->restArea().getBottom() - 2.0f).withHeight (12.0f).expanded (20.0f, 0.0f),
+                    Justification::centred);
+    }
+
+    // the switches: round toy tokens
+    for (auto* pl : pills) drawToken (g, *pl);
+
+    drawStoreSign (g);
+    drawHelpButton (g);
+    drawResetButton (g);
+    drawPopsButton (g);
+}
+
+namespace
+{
+    // a soft box blur, a few passes, on a small image (the room behind the sphere when you zoom in)
+    void boxBlur (Image& img, int radius)
+    {
+        if (radius < 1) return;
+        Image::BitmapData bd (img, Image::BitmapData::readWrite);
+        const int w = bd.width, h = bd.height;
+        std::vector<PixelARGB> line ((size_t) jmax (w, h));
+        auto pass = [&] (bool horizontal)
+        {
+            const int n = horizontal ? w : h, m = horizontal ? h : w;
+            for (int j = 0; j < m; ++j)
+            {
+                auto px = [&] (int i) -> PixelARGB& { return horizontal ? *reinterpret_cast<PixelARGB*> (bd.getPixelPointer (i, j)) : *reinterpret_cast<PixelARGB*> (bd.getPixelPointer (j, i)); };
+                for (int i = 0; i < n; ++i) line[(size_t) i] = px (i);
+                int sa = 0, sr = 0, sg = 0, sb = 0, cnt = 0;
+                auto add = [&] (int i, int sign)
+                {
+                    const PixelARGB& q = line[(size_t) i];
+                    sa += sign * q.getAlpha(); sr += sign * q.getRed(); sg += sign * q.getGreen(); sb += sign * q.getBlue(); cnt += sign;
+                };
+                for (int i = 0; i <= jmin (radius, n - 1); ++i) add (i, 1);
+                for (int i = 0; i < n; ++i)
+                {
+                    px (i).setARGB ((uint8) (sa / cnt), (uint8) (sr / cnt), (uint8) (sg / cnt), (uint8) (sb / cnt));
+                    if (i + radius + 1 < n) add (i + radius + 1, 1);
+                    if (i - radius >= 0) add (i - radius, -1);
+                }
+            }
+        };
+        for (int k = 0; k < 2; ++k) { pass (true); pass (false); }
+    }
+}
+
+void FreakiePieEditor::drawRoom (Graphics& g, Rectangle<float> full, float blur)
+{
+    const auto d = (uint32) theme.deep.getARGB();
+    const float b = std::round (blur * 20.0f) / 20.0f;   // (in steps, so a zoom gesture re-renders it only now and then)
+    auto paintPicture = [this, full] (Graphics& gg)
+    {
+        gg.setGradientFill (ColourGradient (theme.deep, 0, 0, theme.deep.brighter (0.45f), 0, full.getBottom(), false));
+        gg.fillRect (full);
+        const float u = ease (bgFade);
+        auto picture = [&] (int bg, float alpha)
+        {
+            const auto& img = background (bg);
+            if (! img.isValid() || alpha <= 0.001f) return;
+            gg.setOpacity (alpha);
+            gg.drawImage (img, full, RectanglePlacement::fillDestination);
+            gg.setOpacity (1.0f);
+        };
+        if (bgFrom != bgTo) picture (bgFrom, 1.0f - u);
+        picture (bgTo, bgFrom == bgTo ? 1.0f : u);
+        const float veil = (bgTo >= 0 ? u : 0.0f) + (bgFrom >= 0 && bgFrom != bgTo ? 1.0f - u : 0.0f);
+        if (veil > 0.0f)
+        {
+            gg.setGradientFill (ColourGradient (theme.deep.withAlpha (0.42f * veil), 0, 0, theme.deep.withAlpha (0.66f * veil), 0, full.getBottom(), false));
+            gg.fillRect (full);
+        }
+        gg.setGradientFill (ColourGradient (palette::dustyPink.withAlpha (0.07f), designW * 0.5f, designH * 0.6f,
+                                            palette::dustyPink.withAlpha (0.0f), designW * 0.5f + 520.0f, designH * 0.6f, true));
+        gg.fillRect (full);
+        gg.setGradientFill (ColourGradient (Colour (0x00000000), 0, designH - 70.0f, Colour (0x55000000), 0, (float) designH, false));
+        gg.fillRect (full.withTop (designH - 70.0f));
+    };
+    if (b <= 0.0f)
+    {
+        drawCached (g, bgLayer, full, { (float) bgFrom, (float) bgTo, std::round (ease (bgFade) * 48.0f), (float) (d & 0xffffu), (float) (d >> 16), 0.0f }, paintPicture);
+        return;
+    }
+    // zoomed in: the whole room at a lower resolution, blurred, then drawn back up and darkened
+    const std::vector<float> key { (float) bgFrom, (float) bgTo, std::round (ease (bgFade) * 48.0f), (float) (d & 0xffffu), (float) (d >> 16), b };
+    if (roomLayer.img.isNull() || roomLayer.key != key)
+    {
+        const float q = 0.5f - 0.3f * b;   // 0.5 .. 0.2 of design size
+        const int w = jmax (1, roundToInt (full.getWidth() * q)), h = jmax (1, roundToInt (full.getHeight() * q));
+        roomLayer.img = Image (Image::ARGB, w, h, true, SoftwareImageType());
+        {
+            Graphics ig (roomLayer.img);
+            ig.addTransform (AffineTransform::scale (q));
+            paintPicture (ig);
+            drawRoomItems (ig);
+        }
+        boxBlur (roomLayer.img, 1 + roundToInt (3.0f * b));
+        roomLayer.key = key;
+    }
+    g.setImageResamplingQuality (Graphics::mediumResamplingQuality);
+    g.drawImage (roomLayer.img, full, RectanglePlacement::stretchToFit);
+    g.setColour (Colours::black.withAlpha (0.5f * b));
+    g.fillRect (full);
 }
