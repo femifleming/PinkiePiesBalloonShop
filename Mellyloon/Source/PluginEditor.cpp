@@ -2275,7 +2275,7 @@ namespace
 
           "The words on the glass show which way is ahead, left, right, behind and up. The glow on the glass and the map at the top left show "
           "where the sound is loudest, like the IEM EnergyVisualizer: red is the loudest place, then yellow, green and blue." },
-        { "Grains",
+        { "Grains in the sphere",
           "The little bouquets flying in the sphere are grains. Click the jar on the left for another one, or drag one out of the jar and drop it where you want it. "
           "Drag a grain back onto the jar, or right-click the jar, to take one away. You can have up to 16.\n\n"
           "Your own sound, dry, plays from one place: the little pink loudspeaker. Drag it anywhere in the sphere.\n\n"
@@ -2417,6 +2417,10 @@ Library::Library (FreakiePieEditor& e) : owner (e)
 }
 
 int Library::numChapters() const noexcept { return (int) std::size (helpChapters); }
+// (for the manual: the same chapters, read out)
+int manualChapterCount() { return (int) std::size (helpChapters); }
+const char* manualChapterTitle (int i) { return helpChapters[i].title; }
+const char* manualChapterBody (int i) { return helpChapters[i].body; }
 void Library::showChapter (int i)
 {
     i = jlimit (0, numChapters() - 1, i);

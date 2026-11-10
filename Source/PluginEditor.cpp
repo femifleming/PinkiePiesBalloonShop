@@ -2116,6 +2116,10 @@ Library::Library (FreakiePieEditor& e) : owner (e)
 }
 
 int Library::numChapters() const noexcept { return (int) std::size (helpChapters); }
+// (for the manual: the same chapters, read out)
+int manualChapterCount() { return (int) std::size (helpChapters); }
+const char* manualChapterTitle (int i) { return helpChapters[i].title; }
+const char* manualChapterBody (int i) { return helpChapters[i].body; }
 void Library::showChapter (int i)
 {
     i = jlimit (0, numChapters() - 1, i);

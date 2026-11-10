@@ -278,10 +278,52 @@ struct FreakieTestAccess
     }
 };
 
+
+// MANUAL_DUMP=<folder>: the parameters and the help chapters, as JSON, for the manual
+static int dumpForManual (const char* dir)
+{
+    const File out (dir);
+    out.createDirectory();
+    FreakiePieProcessor p;
+    Array<var> params;
+    for (auto* ap : p.getParameters())
+        if (auto* r = dynamic_cast<RangedAudioParameter*> (ap))
+        {
+            DynamicObject::Ptr o = new DynamicObject();
+            o->setProperty ("id", r->getParameterID());
+            o->setProperty ("name", r->getName (100));
+            o->setProperty ("default", r->getText (r->getDefaultValue(), 100));
+            o->setProperty ("min", r->getText (0.0f, 100));
+            o->setProperty ("max", r->getText (1.0f, 100));
+            String type = "continuous";
+            if (auto* c = dynamic_cast<AudioParameterChoice*> (r)) { type = "choice"; o->setProperty ("choices", c->choices.joinIntoString (", ")); }
+            else if (dynamic_cast<AudioParameterBool*> (r) != nullptr) type = "switch";
+            else if (dynamic_cast<AudioParameterInt*> (r) != nullptr) type = "steps";
+            o->setProperty ("type", type);
+            params.add (var (o.get()));
+        }
+    Array<var> help;
+    for (int i = 0; i < manualChapterCount(); ++i)
+    {
+        DynamicObject::Ptr o = new DynamicObject();
+        o->setProperty ("title", String (manualChapterTitle (i)));
+        o->setProperty ("body", String::fromUTF8 (manualChapterBody (i)));
+        help.add (var (o.get()));
+    }
+    Array<var> presets;
+    for (int i = 0; i < p.getNumPrograms(); ++i) presets.add (p.getProgramName (i));
+    out.getChildFile ("params.json").replaceWithText (JSON::toString (var (params)));
+    out.getChildFile ("help.json").replaceWithText (JSON::toString (var (help)));
+    out.getChildFile ("presets.json").replaceWithText (JSON::toString (var (presets)));
+    std::printf ("manual material: %d parameters, %d chapters, %d presets in %s\n", params.size(), help.size(), presets.size(), out.getFullPathName().toRawUTF8());
+    return 0;
+}
+
 int main (int argc, char** argv)
 {
     std::setvbuf (stdout, nullptr, _IOLBF, 0);   // one line at a time, so a long run shows where it is
     ScopedJuceInitialiser_GUI init;
+    if (auto* md = std::getenv ("MANUAL_DUMP")) return dumpForManual (md);
     int fails = 0;
     FreakiePieProcessor::rememberLastState = false;   // start every test instance from the defaults
 

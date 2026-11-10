@@ -18,6 +18,8 @@ Your sound goes through the effects in the order you set: move the cursor to the
 
 **[How to use it: the full help page](docs/HELP.md)** (the same guide is in the plug-in's library: click **help** in the top right corner).
 
+**[The manual (PDF)](docs/manual/Pinkie%20Pies%20Balloon%20Shop%20Manual.pdf)**: installing, a map of the window, how the sound flows, the whole guide with pictures, every parameter, the store's effects, the presets and answers to common problems. It's also in every download.
+
 ## Download
 
 Get the latest version from the [Releases page](https://github.com/femifleming/PinkiePiesBalloonShop/releases/latest):

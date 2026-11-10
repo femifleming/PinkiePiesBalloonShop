@@ -3,6 +3,7 @@
 This is the same guide you'll find inside the plug-in: click **help** in the top right corner to open the library, where Twilight reads in the corner.
 
 ![The library](../../docs/help/library.jpg)
+There's also a [PDF manual](manual/Mellyloon%20Manual.pdf) with all of this and more.
 
 ## Contents
 
@@ -20,6 +21,7 @@ This is the same guide you'll find inside the plug-in: click **help** in the top
 - [Catching sounds](#catching-sounds)
 - [The canister](#the-canister)
 - [Weather](#weather)
+- [Sonic rainboom](#sonic-rainboom)
 - [The balloon store](#the-balloon-store)
 - [The chalkboard](#the-chalkboard)
 - [The card](#the-card)
@@ -27,7 +29,7 @@ This is the same guide you'll find inside the plug-in: click **help** in the top
 
 ## Welcome
 
-Every balloon in the sphere is a control, and how full it is shows its value.
+Every balloon in the shop is a control, and how full it is shows its value.
 
 In short: drag to move, scroll to inflate, shift-drag for fine changes, double-click to reset, click a caught sound to type its pitch, drag the pin to pop them.
 
@@ -47,8 +49,6 @@ Drag the empty glass to turn the sphere round and look at it from anywhere. Turn
 
 Scroll or pinch on the empty glass to zoom in, towards wherever the cursor is: the balloons grow so they're easy to read and edit, and the room behind blurs and darkens. Double-click the glass to set the view back.
 
-A sound balloon you catch, or an effect you buy, flies from the pump or the store into the sphere, so you can see where it goes.
-
 The words on the glass show which way is ahead, left, right, behind and up. The glow on the glass and the map at the top left show where the sound is loudest, like the IEM EnergyVisualizer: red is the loudest place, then yellow, green and blue.
 
 ![The sphere, turned](help/sphere_turned.jpg)
@@ -59,7 +59,7 @@ The little bouquets flying in the sphere are grains. Click the jar on the left f
 
 Your own sound, dry, plays from one place: the little pink loudspeaker. Drag it anywhere in the sphere.
 
-The grains token on the right picks how the effects use the grains. On spatial, every grain carries its own copy of the effects (the smear, the pitch shifter, the gumball machine and what you bought), and each copy's sound plays at its grain as a point, so you can hear where each one is. The granulator (the mint balloons) is a cloud of short grains, each one born at its own direction round one of the grains, like the IEM GranularEncoder: grain spread sets how far round its grain each one may land, from exactly there to anywhere on the sphere. On scatter there's only one copy of the effects, at the first grain, and the granulator's grains still go to all of them. On copies, every grain is the whole shop, your dry sound and all.
+The grains token on the right picks how the effects use the grains. On spatial, every grain carries its own copy of the effects (the smear, the pitch shifter, the gumball machine and what you bought), and each copy's sound plays at its grain as a point, so you can hear where each one is. The granulator (the mint balloons) is a cloud of short grains, each one born at its own direction round one of the grains, like the IEM GranularEncoder: grain spread sets how far round its grain each one may land, from exactly there to anywhere on the sphere. On scatter there's only one copy of the effects, at the first grain, and the granulator's grains still go to all of them. On copies, every grain is the whole shop, your dry sound and all, the way the sphere first worked.
 
 Deviate is how far the copies stray from your settings. The first grain always plays your settings as they are; the others drift away slowly, each its own way, and now and then freeze or let go by themselves. In the granulator it makes every grain's length, start and pitch a little different. Every sound in the sphere is a single point, so you can always tell where it is.
 
@@ -71,9 +71,13 @@ A grain glows with its sound, hops when it stutters and frosts over when it free
 
 The flight token picks how the grains move, and speed sets how fast.
 
-Still keeps each grain where you dropped it. Orbit sends each one round you on its own tilted ring. Lorenz flies them along the Lorenz attractor, the butterfly, each one starting somewhere else on it. Flock makes them a flock of birds (boids): they keep apart, line up and stay together. Random picks a new place every so often and glides there.
+Still keeps each grain where you dropped it. Orbit sends each one round you on its own tilted ring. Lorenz flies them along the Lorenz attractor, the butterfly, each one starting somewhere else on it. Flock makes them a flock of birds (boids): they keep apart, line up and stay together. Random picks a new place every so often and glides there. Spiral winds them round you, climbing and sinking. Lissajous traces looping figures, each grain at its own rates. Rossler flies them on the Rossler attractor, a loose coil that now and then flicks up. Breathe sends them out to the glass and back in again, like breathing. Fall drops them from the top of the sphere to the bottom, over and over. Ping-pong throws them straight across the sphere, from one side to the other.
 
-Distance is the size of the bubble you're in, from 1.5 metres to 24. In a small bubble everything is close and loud and the room answers quickly; in a big one everything is far away, quieter, a little duller and roomier. It sounds the way distance does, after the IEM RoomEncoder: the sound takes longer to arrive from further away (so anything flying towards you or away bends in pitch, like a passing car), and the walls of a room round the bubble answer each sound faintly. Close in, a sound spreads round your head.
+Distance is the size of the bubble you're in, from 1 metre to 50. In a small bubble everything is close and loud and the room answers quickly; in a big one everything is far away, quieter, a little duller and roomier. It sounds the way distance does, after the IEM RoomEncoder: the sound takes longer to arrive from further away (so anything flying towards you or away bends in pitch, like a passing car), and the walls of a room round the bubble answer each sound faintly. Close in, a sound spreads round your head.
+
+The doppler token switches that pitch bend on and off. Off, moving sounds keep their pitch and still get louder and quieter as they come and go.
+
+When it's cloudy the tokens on the right wander too, like a balloon inside a cloud: a little cloud sits on each one while it does. Touch one and it stops.
 
 You can drag a grain while it flies. Let go and it carries on from there.
 
@@ -83,21 +87,11 @@ Out comes third-order Ambisonics on 16 channels, ACN order with SN3D normalisati
 
 There is one reverb for the whole sphere (the lilac balloons), built like the IEM FdnReverb: 64 delay lines run on the 16 channels, with the highs dying away faster than the lows. The grains further out send more into it.
 
-In the weather, clouds, rain clouds, snow flurries and heat haze also drift through the inside of the glass. Any grain a patch passes over gets its settings shaken up at random while it's in there. Snow freezes that grain's spectrum, and the heat smears it.
-
 ![Weather in the sphere](help/sphere_weather.jpg)
 
 ## Colours
 
 Each bunch has its own colour, and so does its bow.
-
-- 🔵 blue: the spectral smear
-- 🟡 yellow: the pitch shifter
-- 🟢 mint: the grains
-- 🟣 lilac: the reverb
-- 🟠 orange: the gumball machine (stutter)
-- 🩷 pink: the loop (main feedback)
-- 🩵 teal: caught sounds
 
 ## The effects
 
@@ -107,7 +101,7 @@ First the spectral smear (the blue balloons), which blurs the sound across time.
 
 Then the pitch shifter. Shift picks the interval, snapped to the scale chosen on the card at the top left, and pitch feedback sends it round again so it keeps climbing.
 
-Then the grains, and last a reverb that keeps the low end clean. That's the order they start in: the order chapter says how to change it.
+Then the grains, and a reverb that keeps the low end clean (in the sphere there's one reverb for all the grains together, at the end). That's the order they start in: the order chapter says how to change it.
 
 Each effect has a mix balloon. When a mix balloon is empty, that effect is out of the way.
 
@@ -141,11 +135,11 @@ Now and then a pluck from the pop pump bounces too.
 
 The sound goes through the effects from left to right, from in to out: the spectral smear (blue), pitch (yellow), grains (mint), reverb (lilac) and a gift box for each effect from the store, the gumball machine (orange) among them.
 
-![The order list](../../docs/help/order.jpg)
-
 The order list waits just off the left edge of the window. Move the cursor to the left edge and it slides out, with the effects from top (in) to bottom (out). Drag one up or down to move it: the others make room, and when you let go the bows hop to their new places and the sound follows with a tiny dip so it never clicks. The die at the top rolls a new order. The order is saved with your session.
 
 The loop (main feedback) and the caught sounds stay on the floor: the loop wraps round all the effects.
+
+![The order list](../../docs/help/order.jpg)
 
 ## The pop pump
 
@@ -183,6 +177,8 @@ The weather switches run along the top of the window: the sun and cloud (cloudy)
 
 Rain eases a gentle lowpass onto the output and soaks the balloons.
 
+In the sphere the weather also drifts through the inside of the glass as patches: clouds, rain clouds, snow flurries and heat haze. Any grain a patch passes over gets its settings shaken up at random while it's in there. Snow freezes that grain's spectrum, and the heat smears it.
+
 When it's cloudy, clouds drift through the bouquet, and any balloon inside one slowly wanders to new values, with a little tag showing where it has got to. Clouds bring thunder too, which pulls the rain's lowpass down in slow rolls.
 
 In a storm, lightning strikes now and then and drops a random effect from the store into the room for a minute or so. If you like it, tick it in the store and it stays.
@@ -193,19 +189,33 @@ Snow and a heatwave never come together: turning one on sends the other away.
 
 A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.
 
+With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there.
+
 ![Heatwave](../../docs/help/heat.jpg)
 
 ![Heatwave fade times](../../docs/help/fades.jpg)
 
 ![Heatwave in the rain](../../docs/help/wet.jpg)
 
-With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there.
-
 ![Weather](../../docs/help/cloudy.jpg)
 
 ![Weather](../../docs/help/storm.jpg)
 
 ![Weather](../../docs/help/snow.jpg)
+
+## Sonic rainboom
+
+The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and something dives in from the sky, faster and faster, until it breaks the sound barrier: a boom and a rainbow at the same moment.
+
+On the way in your sound is squeezed up in pitch, the way a sound rushing towards you would be, with a rush of air under it. The boom has the real shape of a sonic boom, a double crack. Then the rainbow: your sound split into seven colours, red the lowest and violet the highest. They arrive one after another, so they sweep up from the lows to the highs, and each one keeps ringing for the rainbow's length while the rainbow fades from the sky.
+
+The shockwave knocks the balloons back, and the ones nearest it are nudged to new values.
+
+Fling a balloon hard enough and it breaks the barrier itself: a white cone grows behind it as you get close. Right-click the cloud for what else sets one off, such as a hit in your sound or the rain stopping after a storm. The same menu sets how loud it is and how long the rainbow lasts.
+
+In the sphere it all happens in 3-D. The dive flies in from outside the glass to where it breaks, and the boom comes from there. Then seven rings open out flat round it, red outermost. A ring off to one side sounds like an arc over there; as it passes over you it surrounds you, and then it leaves through the glass. With on fast grains ticked, a grain flying faster than 30 metres a second breaks it where it is.
+
+![The rainboom in the sphere](help/sphere_rainboom.jpg)
 
 ## The balloon store
 
@@ -254,6 +264,3 @@ Leave the shop alone for a while and she falls asleep.
 Every so often, about once an hour, the Great and Powerful Trixie barges in. She zaps balloons from her amulet, each one jumping to a new value, then sets everything she can reach at random with one big flash and leaves. Some visits she also plays a strange synthesised noise into the shop's input, which goes through all the effects, with a chirp for every zap. Sometimes she zaps a few effects from the store into the room too, and those stay. She leaves the bypass and the volume alone, and never touches the snow, the heat or auto weather. If you don't like what she did, the reset button under the help book puts everything back to normal.
 
 ![Pinkie](../../docs/help/trixie.jpg)
-
----
-[Back to the README](../README.md)

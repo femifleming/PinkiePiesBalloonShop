@@ -67,6 +67,7 @@ jobs:
           codesign --force --deep -s - "dist/$NAME/$NAME.component"
           codesign --force --deep -s - "dist/$NAME/$NAME.vst3"
           cp Mellyloon/README.md LICENSE "dist/$NAME/"
+          cp "Mellyloon/docs/manual/Mellyloon Manual.pdf" "dist/$NAME/"
           cd dist && ditto -c -k --keepParent "$NAME" "${{ matrix.package }}"
 
       - name: Package (Windows)
@@ -78,6 +79,7 @@ jobs:
           Copy-Item -Recurse "$A/VST3/$env:NAME.vst3" "dist/$env:NAME/"
           Copy-Item "$A/Standalone/$env:NAME.exe" "dist/$env:NAME/"
           Copy-Item Mellyloon/README.md, LICENSE "dist/$env:NAME/"
+          Copy-Item "Mellyloon/docs/manual/Mellyloon Manual.pdf" "dist/$env:NAME/"
           Compress-Archive -Path "dist/$env:NAME" -DestinationPath "dist/${{ matrix.package }}"
 
       - name: Package (Linux)
@@ -88,6 +90,7 @@ jobs:
           cp -R "$A/VST3/$NAME.vst3" "$A/LV2/$NAME.lv2" "dist/$NAME/"
           cp "$A/Standalone/$NAME" "dist/$NAME/"
           cp Mellyloon/README.md LICENSE "dist/$NAME/"
+          cp "Mellyloon/docs/manual/Mellyloon Manual.pdf" "dist/$NAME/"
           tar -czf "dist/${{ matrix.package }}" -C dist "$NAME"
 
       - uses: actions/upload-artifact@v4
@@ -100,10 +103,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: packages
           merge-multiple: true
+      - name: The manual
+        run: cp "Mellyloon/docs/manual/Mellyloon Manual.pdf" packages/
       - name: Checksums
         run: cd packages && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2

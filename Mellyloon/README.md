@@ -25,6 +25,8 @@ Everything else is the Balloon Shop: the order ring, the pumps, the store, the c
 
 **[How to use it: the full help page](docs/HELP.md)** (the same guide is in the plug-in's library: click **help** in the top right corner).
 
+**[The manual (PDF)](docs/manual/Mellyloon%20Manual.pdf)**: installing, routing to a decoder, a map of the window, how the sound flows, the whole guide with pictures, the flight modes, distance and Doppler, every parameter, the presets and answers to common problems. It's also in every download.
+
 ## In REAPER with the IEM plug-ins
 
 1. Put Mellyloon on a track and set the track to 16 channels (the track's **Route** button, *Track channels: 16*).
@@ -32,9 +34,21 @@ Everything else is the Balloon Shop: the order ring, the pumps, the store, the c
 
 On a track with fewer than 16 channels only the first channels come out, and the plug-in's map says so.
 
-## Download and build
+## Download
 
-Mellyloon isn't released as a download yet. When it is, its releases will be tagged `mellyloon-v...` on the [Balloon Shop's Releases page](https://github.com/femifleming/PinkiePiesBalloonShop/releases), separate from the shop's own. For now, build it from this folder. You need CMake 3.22 or later and a C++20 compiler (Xcode on macOS, Visual Studio 2022 on Windows, GCC or Clang on Linux):
+Mellyloon's releases are tagged `mellyloon-v...` on the [Balloon Shop's Releases page](https://github.com/femifleming/PinkiePiesBalloonShop/releases), separate from the shop's own:
+
+| System | File |
+| --- | --- |
+| macOS 11 or later (Apple silicon and Intel) | `Mellyloon-macOS.zip` (Audio Unit, VST3, app) |
+| Windows 10 or later (64-bit) | `Mellyloon-Windows.zip` (VST3, app) |
+| Linux (x86-64) | `Mellyloon-Linux.tar.gz` (VST3, LV2, app) |
+
+Install it the way the [Balloon Shop's README](../README.md#install) describes, with `Mellyloon` in place of `Pinkie Pies Balloon Shop` (on macOS: the `.component` to `~/Library/Audio/Plug-Ins/Components`, the `.vst3` to `~/Library/Audio/Plug-Ins/VST3`, then `xattr -dr com.apple.quarantine` on both, since the builds aren't notarised). The manual has the steps for every system.
+
+## Build it yourself
+
+You need CMake 3.22 or later and a C++20 compiler (Xcode on macOS, Visual Studio 2022 on Windows, GCC or Clang on Linux):
 
 ```sh
 git clone --recursive https://github.com/femifleming/PinkiePiesBalloonShop.git

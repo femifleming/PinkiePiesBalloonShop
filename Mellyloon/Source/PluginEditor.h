@@ -994,3 +994,8 @@ private:
     friend class PinTool;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FreakiePieEditor)
 };
+
+// the help chapters, for the manual
+int manualChapterCount();
+const char* manualChapterTitle (int);
+const char* manualChapterBody (int);

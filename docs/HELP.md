@@ -3,6 +3,7 @@
 This is the same guide you'll find inside the plug-in: click **help** in the top right corner to open the library, where Twilight reads in the corner.
 
 ![The library](help/library.jpg)
+There's also a [PDF manual](manual/Pinkie%20Pies%20Balloon%20Shop%20Manual.pdf) with all of this and more.
 
 ## Contents
 
@@ -16,6 +17,7 @@ This is the same guide you'll find inside the plug-in: click **help** in the top
 - [Catching sounds](#catching-sounds)
 - [The canister](#the-canister)
 - [Weather](#weather)
+- [Sonic rainboom](#sonic-rainboom)
 - [The balloon store](#the-balloon-store)
 - [The chalkboard](#the-chalkboard)
 - [The card](#the-card)
@@ -38,14 +40,6 @@ The bows hold each bunch. Drag a bow to move its whole bunch. The next page show
 ## Colours
 
 Each bunch has its own colour, and so does its bow.
-
-- 🔵 blue: the spectral smear
-- 🟡 yellow: the pitch shifter
-- 🟢 mint: the grains
-- 🟣 lilac: the reverb
-- 🟠 orange: the gumball machine (stutter)
-- 🩷 pink: the loop (main feedback)
-- 🩵 teal: caught sounds
 
 ## The effects
 
@@ -89,11 +83,11 @@ Now and then a pluck from the pop pump bounces too.
 
 The sound goes through the effects from left to right, from in to out: the spectral smear (blue), pitch (yellow), grains (mint), reverb (lilac) and a gift box for each effect from the store, the gumball machine (orange) among them.
 
-![The order list](help/order.jpg)
-
 The order list waits just off the left edge of the window. Move the cursor to the left edge and it slides out, with the effects from top (in) to bottom (out). Drag one up or down to move it: the others make room, and when you let go the bows hop to their new places and the sound follows with a tiny dip so it never clicks. The die at the top rolls a new order. The order is saved with your session.
 
 The loop (main feedback) and the caught sounds stay on the floor: the loop wraps round all the effects.
+
+![The order list](help/order.jpg)
 
 ## The pop pump
 
@@ -141,19 +135,33 @@ Snow and a heatwave never come together: turning one on sends the other away.
 
 A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.
 
+With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there.
+
 ![Heatwave](help/heat.jpg)
 
 ![Heatwave fade times](help/fades.jpg)
 
 ![Heatwave in the rain](help/wet.jpg)
 
-With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there.
-
 ![Weather](help/cloudy.jpg)
 
 ![Weather](help/storm.jpg)
 
 ![Weather](help/snow.jpg)
+
+## Sonic rainboom
+
+The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and something dives in from the sky, faster and faster, until it breaks the sound barrier: a boom and a rainbow at the same moment.
+
+On the way in your sound is squeezed up in pitch, the way a sound rushing towards you would be, with a rush of air under it. The boom has the real shape of a sonic boom, a double crack. Then the rainbow: your sound split into seven colours, red the lowest and violet the highest. They arrive one after another, so they sweep up from the lows to the highs, and each one keeps ringing for the rainbow's length while the rainbow fades from the sky.
+
+The shockwave knocks the balloons back, and the ones nearest it are nudged to new values.
+
+Fling a balloon hard enough and it breaks the barrier itself: a white cone grows behind it as you get close. Right-click the cloud for what else sets one off, such as a hit in your sound or the rain stopping after a storm. The same menu sets how loud it is and how long the rainbow lasts.
+
+In stereo the colours fan out as the ring opens, red to the left and violet to the right.
+
+![The rainboom ring](help/rainboom.jpg)
 
 ## The balloon store
 
@@ -202,6 +210,3 @@ Leave the shop alone for a while and she falls asleep.
 Every so often, about once an hour, the Great and Powerful Trixie barges in. She zaps balloons from her amulet, each one jumping to a new value, then sets everything she can reach at random with one big flash and leaves. Some visits she also plays a strange synthesised noise into the shop's input, which goes through all the effects, with a chirp for every zap. Sometimes she zaps a few effects from the store into the room too, and those stay. She leaves the bypass and the volume alone, and never touches the snow, the heat or auto weather. If you don't like what she did, the reset button under the help book puts everything back to normal.
 
 ![Pinkie](help/trixie.jpg)
-
----
-[Back to the README](../README.md)
