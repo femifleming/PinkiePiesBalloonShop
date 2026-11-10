@@ -19,13 +19,13 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 SHOP = dict(
-    key="shop", name="Pinkie Pie's Balloon Shop", short="the Balloon Shop", version="1.1.0",
+    key="shop", name="Pinkie Pie's Balloon Shop", short="the Balloon Shop", version="1.1.1",
     icon=os.path.join(REPO, "Resources/icon/icon_1024.png"),
     tagline="A multi-effect you play as balloons.",
     accent="#ff4f9a", accent2="#ffc4e1",
 )
 MELLY = dict(
-    key="melly", name="Mellyloon", short="Mellyloon", version="0.1.0",
+    key="melly", name="Mellyloon", short="Mellyloon", version="0.1.1",
     icon=os.path.join(REPO, "Mellyloon/Resources/icon/icon_1024.png"),
     tagline="The Balloon Shop inside a glass sphere: a third-order Ambisonics encoder.",
     accent="#8a6bff", accent2="#d9ccff",
@@ -492,10 +492,10 @@ def build(cfg, dump, shots_dir, out_pdf):
     # about
     if cfg["key"] == "shop":
         about = """<p>The Balloon Shop is a multi-effect you play as balloons. Every balloon is a control, and how full it is shows its value. Your sound goes through a chain of effects in an order you set, the weather changes it, pumps blow up plucked notes or catch sounds into frozen balloons, and a little cloud sets off a sonic rainboom.</p>
-<p>This manual covers version 1.1.0. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, a map of the window and how the sound flows. After it there's a quick reference for gestures, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>"""
+<p>This manual covers version 1.1.1. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, a map of the window and how the sound flows. After it there's a quick reference for gestures, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>"""
     else:
         about = """<p>Mellyloon is the Balloon Shop inside a glass sphere: a third-order Ambisonics encoder. Stereo comes in; 16 channels of a sound field come out, for a decoder to play on loudspeakers or headphones. Little bouquets of balloons fly round inside the sphere, each carrying its own copy of the effects, and every sound is a single point you can hear and find, with its distance, its Doppler shift and one reverb for the whole sphere.</p>
-<p>This manual covers version 0.1.0, the first release. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, how to route it to a decoder, a map of the window and how the sound flows. After it there are the flight modes, distance and Doppler, a gesture reference, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>
+<p>This manual covers version 0.1.1. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, how to route it to a decoder, a map of the window and how the sound flows. After it there are the flight modes, distance and Doppler, a gesture reference, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>
 <p>Everything in the Balloon Shop is here too, so the shop's own manual also applies.</p>"""
     parts.append("<h2 id='about'>About this manual</h2>" + about)
     parts.append(install_section(cfg))
