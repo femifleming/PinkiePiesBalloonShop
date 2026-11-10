@@ -648,10 +648,14 @@ private:
         int icon = 0;
         juce::Point<float> home;
         float phase = 0.0f;
+        // in cloudy weather the sphere's tokens wander too, like the balloons in a cloud
+        bool cloudable = false, drifting = false;
+        float driftTarget = 0.0f, driftClock = 0.0f, cloudVis = 0.0f;
     };
-    enum TokenIcon { iconPops = 0, iconTone, iconCatch, iconFlight, iconSpeed, iconSpread, iconDeviate, iconWidth, iconOutput };
+    enum TokenIcon { iconPops = 0, iconTone, iconCatch, iconFlight, iconSpeed, iconSpread, iconDeviate, iconWidth, iconOutput, iconDoppler };
 
-    void pillStep (float dt);   // the tokens bob gently where they are
+    void pillStep (float dt);   // the tokens bob gently where they are (and wander when it's cloudy)
+    void stopPillDrift (Pill&);
     // right-click the pop sounds token: switch them on or off, or send them into the effects
     void openPopsMenu();
 

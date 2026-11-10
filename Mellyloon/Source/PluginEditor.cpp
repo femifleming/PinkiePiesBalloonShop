@@ -873,8 +873,11 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
     addPill (ids::flightSpeed, "speed",   { 904.0f, 160.0f }, balloonLilac,  iconSpeed);
     addPill (ids::spread,      "distance",  { 846.0f, 236.0f }, balloonBlue,   iconSpread);
     addPill (ids::deviate,     "deviate", { 904.0f, 236.0f }, balloonOrange, iconDeviate);
-    addPill (ids::grainMode,   "grains",  { 875.0f, 312.0f }, balloonMint,   iconDeviate);
+    addPill (ids::grainMode,   "grains",  { 846.0f, 312.0f }, balloonMint,   iconDeviate);
+    addPill (ids::doppler,     "doppler", { 904.0f, 312.0f }, balloonPink,   iconDoppler);
     for (int i = 0; i < pills.size(); ++i) pills[i]->phase = 0.9f * (float) i;
+    for (auto* pl : pills)   // the clouds move these (not the switches, not where the sound comes from)
+        pl->cloudable = pl->param->getParameterID() != ids::doppler && pl->param->getParameterID() != ids::catchFrom;
     if (auto* gp = p.apvts.getParameter (ids::grains))
     {
         grainsAtt = std::make_unique<ParameterAttachment> (*gp, [this] (float v) { grainsValue = v; });
@@ -1173,6 +1176,12 @@ void FreakiePieEditor::drawToken (Graphics& g, const Pill& pl) const
                 else if (m == 2) q = { std::sin (u) * 0.9f, std::sin (2.0f * u) * 0.45f };                     // lorenz's butterfly
                 else if (m == 3) q = { std::cos (u) * 0.8f + 0.15f * std::sin (5.0f * u), std::sin (u) * 0.4f }; // flock
                 else if (m == 4) q = { std::sin (u * 3.0f) * 0.8f, std::cos (u * 5.0f) * 0.5f };              // random
+                else if (m == 5) { const float k = u / MathConstants<float>::twoPi; q = { std::cos (u * 3.0f) * 0.75f, 0.6f - 1.2f * k + 0.12f * std::sin (u * 3.0f) }; }   // spiral
+                else if (m == 6) q = { std::sin (u * 3.0f) * 0.8f, std::sin (u * 2.0f) * 0.6f };              // lissajous
+                else if (m == 7) { const float rr = 0.35f + 0.35f * (0.5f + 0.5f * std::sin (u * 2.0f)); q = { std::cos (u * 2.0f) * rr, std::sin (u * 2.0f) * rr * 0.8f + (u > MathConstants<float>::pi ? 0.1f : -0.1f) }; }   // rossler
+                else if (m == 8) { const float rr = 0.2f + 0.6f * (0.5f - 0.5f * std::cos (u)); q = { rr * 0.8f, -rr * 0.6f }; }   // breathe: out and in
+                else if (m == 9) q = { 0.3f * std::sin (u * 2.0f), -0.75f + 1.5f * (float) i / 48.0f };        // fall
+                else if (m == 10) q = { (std::abs (std::fmod (u / MathConstants<float>::pi, 2.0f) - 1.0f) * 2.0f - 1.0f) * 0.8f, 0.0f };   // ping-pong
                 else q = { 0.0f, 0.0f };
                 q = c + q * (R * 0.62f);
                 if (i == 0) path.startNewSubPath (q); else path.lineTo (q);
@@ -1183,6 +1192,20 @@ void FreakiePieEditor::drawToken (Graphics& g, const Pill& pl) const
             const auto dot = m == 0 ? c : path.getPointAlongPath (frac2 (u * 0.25f) * path.getLength());
             g.setColour (ink);
             g.fillEllipse (Rectangle<float> (5.0f, 5.0f).withCentre (dot));
+            break;
+        }
+        case iconDoppler:  // a dot flying past, its sound waves bunched up ahead and stretched behind (flat rings when off)
+        {
+            const float x = -0.45f + 0.9f * frac2 (t * 0.35f);
+            g.setColour (ink.withAlpha (0.75f));
+            for (int i = 1; i <= 3; ++i)
+            {
+                const float age = (float) i * 0.17f, rr = R * age * 1.3f;
+                const float cx = lit ? c.x + R * (x - age * 0.45f) : c.x + R * x;
+                g.drawEllipse (Rectangle<float> (2.0f * rr, 2.0f * rr).withCentre ({ cx, c.y }), 1.0f);
+            }
+            g.setColour (ink);
+            g.fillEllipse (Rectangle<float> (5.0f, 5.0f).withCentre ({ c.x + R * x, c.y }));
             break;
         }
         case iconSpeed:    // speed lines, faster as it's turned up
@@ -1256,6 +1279,15 @@ void FreakiePieEditor::drawToken (Graphics& g, const Pill& pl) const
         default: break;
     }
 
+    // in a cloud: a little cloud resting on the token, drifting across it
+    if (pl.cloudVis > 0.02f)
+    {
+        g.setColour (Colours::white.withAlpha (0.5f * pl.cloudVis));
+        const float dx = R * 0.25f * std::sin (t * 0.4f + pl.phase);
+        for (auto q : { Point<float> (-0.42f, -0.78f), Point<float> (0.0f, -0.92f), Point<float> (0.4f, -0.8f), Point<float> (-0.2f, -0.7f), Point<float> (0.2f, -0.68f) })
+            g.fillEllipse (Rectangle<float> (R * 0.62f, R * 0.5f).withCentre (c + Point<float> (q.x * R + dx, q.y * R)));
+    }
+
     // gloss on top
     g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.55f), c.x, c.y - R, Colours::white.withAlpha (0.0f), c.x, c.y - R * 0.1f, false));
     g.fillEllipse (Rectangle<float> (R * 1.3f, R * 0.8f).withCentre ({ c.x - R * 0.1f, c.y - R * 0.5f }));
@@ -1271,14 +1303,59 @@ void FreakiePieEditor::drawToken (Graphics& g, const Pill& pl) const
 
 //==============================================================================
 // The tokens bob gently where they sit.
-void FreakiePieEditor::pillStep (float)
+// When it's cloudy the sphere's tokens wander like a balloon inside a cloud: a knob drifts towards a
+// random value that changes every few seconds (at most 7 % of its range a second), a choice takes a
+// random step every few seconds. Touching one stops it.
+void FreakiePieEditor::pillStep (float dt)
 {
     const float t = (float) clock;
+    const bool cloudy = cloudyOn();
     for (auto* pl : pills)
     {
         pl->c = pl->home + Point<float> (2.0f * std::sin (t * 0.7f + pl->phase), 3.0f * std::sin (t * 0.9f + pl->phase));
         pl->r = pl->r.withCentre (pl->c);
+
+        const bool can = cloudy && pl->cloudable && dragPill != pl;
+        pl->cloudVis += ((can ? 1.0f : 0.0f) - pl->cloudVis) * jmin (1.0f, dt * 1.5f);
+        if (! can) { stopPillDrift (*pl); continue; }
+        const float wdt = dt * (1.0f - frozen);
+        if (! pl->drifting)
+        {
+            pl->drifting = true;
+            pl->driftTarget = rnd.nextFloat();
+            pl->driftClock = pl->continuous ? 2.0f + 3.0f * rnd.nextFloat() : 3.0f + 5.0f * rnd.nextFloat();
+            if (pl->continuous) pl->att->beginGesture();
+        }
+        pl->driftClock -= wdt;
+        if (! pl->continuous)
+        {
+            if (pl->driftClock <= 0.0f)
+            {
+                pl->driftClock = 5.0f + 7.0f * rnd.nextFloat();
+                if (auto* c = dynamic_cast<AudioParameterChoice*> (pl->param))
+                {
+                    const int n = c->choices.size();
+                    int to = rnd.nextInt (n);
+                    if (to == roundToInt (pl->value)) to = (to + 1) % n;
+                    pl->att->setValueAsCompleteGesture ((float) to);
+                    pl->bounceVel += 4.0f;
+                }
+            }
+            continue;
+        }
+        if (pl->driftClock <= 0.0f) { pl->driftClock = 2.0f + 3.0f * rnd.nextFloat(); pl->driftTarget = rnd.nextFloat(); }
+        const float v = pl->param->convertTo0to1 (pl->value);
+        const float lim = 0.07f * wdt;
+        const float next = jlimit (0.0f, 1.0f, v + jlimit (-lim, lim, (pl->driftTarget - v) * 0.6f * wdt));
+        if (std::abs (next - v) > 1.0e-6f) pl->att->setValueAsPartOfGesture (pl->param->convertFrom0to1 (next));
     }
+}
+
+void FreakiePieEditor::stopPillDrift (Pill& pl)
+{
+    if (! pl.drifting) return;
+    pl.drifting = false;
+    if (pl.continuous) pl.att->endGesture();
 }
 
 // Right-click the pop sounds token: switch them on or off, or feed them into the effects (then the
@@ -2193,11 +2270,16 @@ namespace
           "The flight token picks how the grains move, and speed sets how fast.\n\n"
           "Still keeps each grain where you dropped it. Orbit sends each one round you on its own tilted ring. "
           "Lorenz flies them along the Lorenz attractor, the butterfly, each one starting somewhere else on it. "
-          "Flock makes them a flock of birds (boids): they keep apart, line up and stay together. Random picks a new place every so often and glides there.\n\n"
-          "Distance is the size of the bubble you're in, from 1.5 metres to 24. In a small bubble everything is close and loud and the room answers quickly; "
+          "Flock makes them a flock of birds (boids): they keep apart, line up and stay together. Random picks a new place every so often and glides there. "
+          "Spiral winds them round you, climbing and sinking. Lissajous traces looping figures, each grain at its own rates. "
+          "Rossler flies them on the Rossler attractor, a loose coil that now and then flicks up. Breathe sends them out to the glass and back in again, like breathing. "
+          "Fall drops them from the top of the sphere to the bottom, over and over. Ping-pong throws them straight across the sphere, from one side to the other.\n\n"
+          "Distance is the size of the bubble you're in, from 1 metre to 50. In a small bubble everything is close and loud and the room answers quickly; "
           "in a big one everything is far away, quieter, a little duller and roomier. It sounds the way distance does, after the IEM RoomEncoder: "
           "the sound takes longer to arrive from further away (so anything flying towards you or away bends in pitch, like a passing car), "
           "and the walls of a room round the bubble answer each sound faintly. Close in, a sound spreads round your head.\n\n"
+          "The doppler token switches that pitch bend on and off. Off, moving sounds keep their pitch and still get louder and quieter as they come and go.\n\n"
+          "When it's cloudy the tokens on the right wander too, like a balloon inside a cloud: a little cloud sits on each one while it does. Touch one and it stops.\n\n"
           "You can drag a grain while it flies. Let go and it carries on from there." },
         { "Out",
           "Out comes third-order Ambisonics on 16 channels, ACN order with SN3D normalisation, the format the IEM and SPARTA plug-ins use. "
@@ -3120,6 +3202,7 @@ void FreakiePieEditor::contentMouse (const MouseEvent& e, int phase)
             if (pl->r.contains (p))
             {
                 if (e.mods.isPopupMenu()) return;
+                stopPillDrift (*pl);   // your hand wins over the cloud
                 if (pl->continuous)
                 {
                     dragPill = pl;
@@ -3234,6 +3317,7 @@ void FreakiePieEditor::contentWheel (const MouseEvent& e, const MouseWheelDetail
         if (pl->r.contains (p))
         {
             int dir = 0;
+            stopPillDrift (*pl);
             if (pl->continuous)
             {
                 float d = std::abs (w.deltaY) >= std::abs (w.deltaX) ? w.deltaY : -w.deltaX;
@@ -6148,8 +6232,11 @@ void FreakiePieEditor::drawEnergyMap (Graphics& g) const
 template <typename Fn>
 void FreakiePieEditor::drawCached (Graphics& g, Layer& L, Rectangle<float> area, std::vector<float> key, Fn&& paintFn) const
 {
+    // made at exactly the screen's pixel scale (a 0.9 window on a retina screen is 1.8), so drawing it
+    // back is a straight copy: a layer made at 2x and drawn at 1.8x made the system resample the whole
+    // window every frame
     const float phys = jmax (0.25f, g.getInternalContext().getPhysicalPixelScaleFactor());
-    const float q = std::ceil (phys * 4.0f) / 4.0f;
+    const float q = std::round (phys * 100.0f) / 100.0f;
     if (L.img.isNull() || L.key != key || L.scale != q || L.area != area)
     {
         const int w = jmax (1, roundToInt (area.getWidth() * q)), h = jmax (1, roundToInt (area.getHeight() * q));
@@ -6160,6 +6247,8 @@ void FreakiePieEditor::drawCached (Graphics& g, Layer& L, Rectangle<float> area,
         paintFn (ig);
         L.key = std::move (key); L.scale = q; L.area = area;
     }
+    Graphics::ScopedSaveState ss (g);
+    g.setImageResamplingQuality (Graphics::lowResamplingQuality);   // 1:1, nothing to smooth
     g.drawImageTransformed (L.img, AffineTransform::scale (area.getWidth() / (float) L.img.getWidth(), area.getHeight() / (float) L.img.getHeight())
                                        .translated (area.getX(), area.getY()), false);
 }

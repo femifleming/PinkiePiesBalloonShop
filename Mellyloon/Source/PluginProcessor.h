@@ -74,6 +74,7 @@ namespace ids
     inline constexpr const char* cloudy     = "cloudy";       // clouds drift among the balloons; thunder; with rain, lightning
     inline constexpr const char* fxBypass   = "fxBypass";
     // the sphere
+    inline constexpr const char* doppler    = "doppler";      // things moving bend in pitch (on) or keep it (off)
     inline constexpr const char* grainMode  = "grainMode";    // copies: each grain is a whole copy of the chain; scatter: one chain, its grains fly about
     inline constexpr const char* grains     = "grains";       // how many copies of the whole chain fly in the sphere (1..16)
     inline constexpr const char* deviate    = "deviate";      // how far each copy's settings stray from yours, and how restlessly
@@ -178,10 +179,10 @@ public:
     //==========================================================================
     // the sphere: up to 16 grains, each a whole copy of the chain, flying round inside it
     static constexpr int kGrains = fp::Flight::kMax;
-    // the Distance knob is the size of the bubble you're in: its radius, 1.5 m (everything close and loud)
-    // to 24 m (everything far, quiet and roomy)
-    static float bubbleMetres (float knob) noexcept { return 1.5f * std::pow (16.0f, juce::jlimit (0.0f, 1.0f, knob)); }
-    float bubbleNow = 7.9f;
+    // the Distance knob is the size of the bubble you're in: its radius, 1 m (everything close and loud)
+    // to 50 m (everything far, quiet and roomy)
+    static float bubbleMetres (float knob) noexcept { return std::pow (50.0f, juce::jlimit (0.0f, 1.0f, knob)); }   // 1 m .. 50 m
+    float bubbleNow = 7.07f;
     struct GrainView   // what the editor sees of each grain (written by the audio thread)
     {
         std::atomic<float> x { 0.0f }, y { 0.0f }, z { 0.0f }, level { 0.0f }, presence { 0.0f };
@@ -290,7 +291,7 @@ private:
     std::atomic<float>* p_grainsLevel = nullptr;
     std::atomic<float>* p_grains = nullptr; std::atomic<float>* p_deviate = nullptr; std::atomic<float>* p_flight = nullptr;
     std::atomic<float>* p_flightSpeed = nullptr; std::atomic<float>* p_spread = nullptr;
-    std::atomic<float>* p_grainMode = nullptr;
+    std::atomic<float>* p_grainMode = nullptr; std::atomic<float>* p_doppler = nullptr;
     float grainsLevelSm = 1.0f;
     std::array<std::atomic<int>, fp::Engine::kSlots> shelf {};
     std::atomic<int> shelfVersion { 0 };

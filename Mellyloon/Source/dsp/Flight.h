@@ -14,13 +14,19 @@ namespace fp
 //            started a hair apart so they come apart over time
 //   flock    boids (Reynolds 1987): keep apart, line up, stay together, and stay in the ball
 //   random   sample and hold with glides: a new random place every so often, eased into
+//   spiral   a helix round you, climbing to the top of the sphere and winding back down
+//   lissajous a 3-D Lissajous figure (different whole-number rates on each axis), its own per grain
+//   rossler  the Rossler attractor (a = b = 0.2, c = 5.7): long lazy loops with a sudden fold upwards
+//   breathe  each grain on its own bearing, swelling out to the edge and back in to you
+//   fall     like rain or snow: drifting down from overhead, past you, and starting again at the top
+//   pingpong jumping between opposite sides of you, gliding quickly across
 //
 // 'spread' is how far out they go (0 the middle, 1 the sphere's skin), 'speed' how fast.
 class Flight
 {
 public:
     static constexpr int kMax = 16;
-    enum Mode { still = 0, orbit, lorenz, flock, random, numModes };
+    enum Mode { still = 0, orbit, lorenz, flock, random, spiral, lissajous, rossler, breathe, fall, pingpong, numModes };
     using Vec3 = ambi::Vec3;
 
     void prepare (double sampleRate)
@@ -36,6 +42,8 @@ public:
             s.phase = 2.3999632f * (float) v;   // the golden angle: evenly round however many there are
             s.rate = 1.0f + 0.35f * rng.bi();
             s.lz = { 6.0f * rng.bi(), 8.0f * rng.bi(), 22.0f + 6.0f * rng.bi() };   // each butterfly starts somewhere else on the attractor
+            s.rs = { 4.0f * rng.bi(), 4.0f * rng.bi(), 0.5f + rng.uni() };       // and each Rossler loop
+            s.dir = Vec3 { rng.bi(), rng.bi(), rng.bi() * 0.6f }.normalised();
             s.target = s.pos;
             s.holdLeft = rng.range (0.2f, 2.0f);
         }
@@ -88,7 +96,7 @@ public:
 private:
     struct State
     {
-        Vec3 pos, vel, home, axis, lz, target;
+        Vec3 pos, vel, home, axis, lz, target, rs, dir;
         float phase = 0.0f, rate = 1.0f, holdLeft = 1.0f;
     };
 
@@ -165,6 +173,71 @@ private:
                 const float spd = s.vel.length();
                 if (spd > maxV) s.vel *= maxV / spd;
                 s.pos += s.vel * dt;
+                break;
+            }
+            case spiral:
+            {
+                s.phase += (float) kTwoPi * sf * 0.3f * s.rate * dt;
+                const float climb = std::sin (s.phase * 0.12f + (float) v);          // up and down the helix
+                const float r = sp * std::sqrt (std::max (0.05f, 1.0f - 0.8f * climb * climb));
+                const float a = s.phase + (float) v * 0.9f;
+                glide ({ r * std::cos (a), r * std::sin (a), climb * sp * 0.85f }, 10.0f);
+                break;
+            }
+            case lissajous:
+            {
+                s.phase += sf * 0.5f * dt;
+                const float fx = 1.0f + (float) (v % 3), fy = 2.0f + (float) ((v + 1) % 3), fz = 3.0f + (float) (v % 2);
+                const float t0 = s.phase;
+                glide (Vec3 { std::sin (fx * t0 + (float) v), std::sin (fy * t0 + 0.7f * (float) v), 0.7f * std::sin (fz * t0 + 1.3f * (float) v) } * (sp * 0.95f), 10.0f);
+                break;
+            }
+            case rossler:
+            {
+                const float h = std::min (0.02f, dt * sf * 2.0f);
+                const int sub = std::max (1, (int) std::ceil (dt * sf * 2.0f / std::max (1.0e-6f, h)));
+                for (int k = 0; k < sub; ++k)
+                {
+                    const Vec3 q = s.rs;
+                    const Vec3 d { -q.y - q.z, q.x + 0.2f * q.y, 0.2f + q.z * (q.x - 5.7f) };
+                    s.rs += d * h;
+                }
+                if (! std::isfinite (s.rs.x) || std::abs (s.rs.x) > 100.0f) s.rs = { 1.0f, 1.0f, 0.5f };
+                const Vec3 to { s.rs.x / 11.0f, s.rs.y / 11.0f, s.rs.z / 12.0f - 0.4f };
+                glide (clampBall (to, 1.0f) * sp, 14.0f);
+                break;
+            }
+            case breathe:
+            {
+                s.phase += (float) kTwoPi * sf * 0.15f * s.rate * dt;
+                const float r = sp * (0.15f + 0.85f * (0.5f + 0.5f * std::sin (s.phase + (float) v * 1.1f)));
+                glide (s.dir * r, 6.0f);
+                break;
+            }
+            case fall:
+            {
+                // down through the sphere at its own speed and place, then back to the top
+                s.target.z -= dt * sf * 0.35f * (0.7f + 0.3f * s.rate);
+                if (s.target.z < -sp)
+                {
+                    const float a = rng.uni() * (float) kTwoPi, r = sp * std::sqrt (rng.uni()) * 0.8f;
+                    s.target = { r * std::cos (a), r * std::sin (a), sp };
+                    s.pos = s.target; s.vel = {};
+                }
+                s.target.x += dt * 0.05f * std::sin (s.phase += dt * 0.7f);   // a little sway
+                glide (s.target, 12.0f);
+                break;
+            }
+            case pingpong:
+            {
+                s.holdLeft -= dt * sf;
+                if (s.holdLeft <= 0.0f)
+                {
+                    s.holdLeft = rng.range (0.5f, 1.5f);
+                    s.dir = s.dir * -1.0f + Vec3 { rng.bi(), rng.bi(), rng.bi() * 0.5f } * 0.25f;
+                    s.dir = s.dir.normalised();
+                }
+                glide (s.dir * sp, 9.0f + 6.0f * sf);
                 break;
             }
             case random:

@@ -23,14 +23,14 @@ const std::vector<Preset>& list()
 
         // ---- the sphere: grains flying round you
         p.push_back ({ "Cloudsdale Carousel", "start", 3, {},
-                       { { ids::grains, 6.0f }, { ids::flight, 1.0f }, { ids::flightSpeed, 0.35f }, { ids::spread, 0.85f }, { ids::deviate, 0.5f },
+                       { { ids::grains, 6.0f }, { ids::flight, 1.0f }, { ids::flightSpeed, 0.35f }, { ids::spread, 0.71f }, { ids::deviate, 0.5f },
                          { ids::rvMix, 0.3f }, { ids::sgMix, 0.25f }, { ids::grMix, 0.35f }, { ids::grSize, 600.0f }, { ids::psMix, 0.0f }, { ids::psFeedback, 0.0f } }, {} });
         p.push_back ({ "Butterfly Falls", "start", 11, "Major Pentatonic",
-                       { { ids::grains, 4.0f }, { ids::flight, 2.0f }, { ids::flightSpeed, 0.5f }, { ids::spread, 0.9f }, { ids::deviate, 0.7f },
+                       { { ids::grains, 4.0f }, { ids::flight, 2.0f }, { ids::flightSpeed, 0.5f }, { ids::spread, 0.74f }, { ids::deviate, 0.7f },
                          { ids::psShift, 7.0f }, { ids::psMix, 0.3f }, { ids::rvMix, 0.35f }, { ids::rvDecay, 7.0f }, { ids::grMix, 0.3f },
                          { ids::stOwned, 1.0f }, { ids::stAmount, 0.25f } }, {} });
         p.push_back ({ "Flock Over Ponyville", "start", 8, {},
-                       { { ids::grainMode, 1.0f }, { ids::grains, 10.0f }, { ids::flight, 3.0f }, { ids::flightSpeed, 0.55f }, { ids::spread, 0.8f },
+                       { { ids::grainMode, 1.0f }, { ids::grains, 10.0f }, { ids::flight, 3.0f }, { ids::flightSpeed, 0.55f }, { ids::spread, 0.67f },
                          { ids::grMix, 0.75f }, { ids::grSize, 180.0f }, { ids::grDensity, 10.0f }, { ids::grPosRand, 1.0f },
                          { ids::rvMix, 0.25f }, { ids::psMix, 0.0f }, { ids::psFeedback, 0.0f } }, {} });
 

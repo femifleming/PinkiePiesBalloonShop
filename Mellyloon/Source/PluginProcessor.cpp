@@ -170,15 +170,16 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
                                          { return String (v) + (v == 1 ? " grain" : " grains"); })));
     mixParam (ids::deviate, "Deviate", 0.35f);
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ids::flight, 1 }, "Flight",
-                                                        StringArray { "still", "orbit", "lorenz", "flock", "random" }, 1));   // (orbit: things flying round you)
+                                                        StringArray { "still", "orbit", "lorenz", "flock", "random", "spiral", "lissajous", "rossler", "breathe", "fall", "ping-pong" }, 1));   // (orbit: things flying round you)
     layout.add (std::make_unique<F> (ParameterID { ids::flightSpeed, 1 }, "Flight Speed", NormalisableRange<float> (0.0f, 1.0f), 0.4f,
                                      A().withStringFromValueFunction ([] (float v, int)
                                      {
                                          const float sf = 0.05f * std::pow (60.0f, v);
                                          return sf < 1.0f ? String (sf, 2) + "x" : String (sf, 1) + "x";
                                      })));
-    layout.add (std::make_unique<F> (ParameterID { ids::spread, 1 }, "Distance", NormalisableRange<float> (0.0f, 1.0f), 0.6f,
-                                     A().withStringFromValueFunction ([] (float v, int) { return String (FreakiePieProcessor::bubbleMetres (v), 1) + " m bubble"; })));
+    layout.add (std::make_unique<F> (ParameterID { ids::spread, 1 }, "Distance", NormalisableRange<float> (0.0f, 1.0f), 0.5f,
+                                     A().withStringFromValueFunction ([] (float v, int) { const float m = FreakiePieProcessor::bubbleMetres (v); return (m < 10.0f ? String (m, 1) : String (roundToInt (m))) + " m bubble"; })));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::doppler, 1 }, "Doppler", true));
     return layout;
 }
 
@@ -226,7 +227,7 @@ FreakiePieProcessor::FreakiePieProcessor()
             p_store[e][k] = apvts.getRawParameterValue (ids::store (e, (ids::StorePart) k));
     p_grains = get (ids::grains); p_deviate = get (ids::deviate); p_flight = get (ids::flight);
     p_flightSpeed = get (ids::flightSpeed); p_spread = get (ids::spread);
-    p_grainMode = get (ids::grainMode);
+    p_grainMode = get (ids::grainMode); p_doppler = get (ids::doppler);
     for (int v = 0; v < kGrains; ++v)
     {
         auto g = std::make_unique<Grain>();
@@ -612,8 +613,13 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     }
     // (the grains fly through most of the bubble; how big the bubble is, is the Distance knob)
     flightPaths.step (seconds, (int) std::lround (p_flight->load()), p_flightSpeed->load(), 0.85f, points);
-    bubbleNow += (bubbleMetres (p_spread->load()) - bubbleNow) * std::min (1.0f, seconds / 0.15f);   // (glides, so turning it doesn't jump)
+    bubbleNow += (bubbleMetres (p_spread->load()) - bubbleNow) * std::min (1.0f, seconds / 0.15f);   // (glides, so turning it does not jump)
     const float sphereMetres = bubbleNow;
+    {
+        const bool dop = p_doppler->load() > 0.5f;
+        srcDist.doppler = popsDist.doppler = dop;
+        for (auto& g : grainsArr) g->dist.doppler = dop;
+    }
     {
         const bool on[fp::SkyPatches::numKinds] = { p_cloudy->load() > 0.5f, p_rain->load() > 0.5f, p_snow->load() > 0.5f, p_heat->load() > 0.5f };
         sky.step (seconds, on);

@@ -1,3 +1,4 @@
+#include <sys/resource.h>
 #include <map>
 #include <set>
 // Runs the real plugin processor + editor headlessly: odd block sizes, sample rates,
@@ -313,10 +314,18 @@ int main (int argc, char** argv)
         win.setUsingNativeTitleBar (true);
         auto* ed = p.createEditorAndMakeActive();
         win.setContentOwned (ed, true);
-        ed->setSize (FreakiePieEditor::designW, FreakiePieEditor::designH);
+        // MELLY_LIVE_SCALE: the window's size against the design (a host opens it at 0.9)
+        const float sc = std::getenv ("MELLY_LIVE_SCALE") != nullptr ? (float) std::atof (std::getenv ("MELLY_LIVE_SCALE")) : 1.0f;
+        ed->setSize ((int) (FreakiePieEditor::designW * sc), (int) (FreakiePieEditor::designH * sc));
+        std::printf ("window %d x %d\n", ed->getWidth(), ed->getHeight());
         win.centreWithSize (win.getWidth(), win.getHeight());
         win.setVisible (true);
         win.toFront (true);
+        if (auto* peer = win.getPeer(); peer != nullptr && std::getenv ("MELLY_RENDER") != nullptr)
+        {
+            peer->setCurrentRenderingEngine (std::atoi (std::getenv ("MELLY_RENDER")));
+            std::printf ("renderer: %s\n", peer->getAvailableRenderingEngines()[peer->getCurrentRenderingEngine()].toRawUTF8());
+        }
         AudioBuffer<float> buf (16, 512); MidiBuffer m;
         Random rnd (4);
         int blk = 0;
@@ -326,6 +335,8 @@ int main (int argc, char** argv)
             MessageManager::getInstance()->runDispatchLoopUntil (800);
             const int f0 = mellyloonDbgFrames;
             const double t0 = Time::getMillisecondCounterHiRes();
+            auto cpuNow = [] { rusage u {}; getrusage (RUSAGE_SELF, &u); return (double) u.ru_utime.tv_sec + 1e-6 * (double) u.ru_utime.tv_usec + (double) u.ru_stime.tv_sec + 1e-6 * (double) u.ru_stime.tv_usec; };
+            const double c0 = cpuNow();
             while (Time::getMillisecondCounterHiRes() - t0 < 3000.0)
             {
                 buf.clear();
@@ -334,7 +345,7 @@ int main (int argc, char** argv)
                 MessageManager::getInstance()->runDispatchLoopUntil (10);
             }
             const double fps = (mellyloonDbgFrames - f0) / ((Time::getMillisecondCounterHiRes() - t0) * 0.001);
-            std::printf ("live fps (%s): %.1f\n", what, fps);
+            std::printf ("live fps (%s): %.1f   (%.1f ms of CPU a frame, sound included)\n", what, fps, 1000.0 * (cpuNow() - c0) / jmax (1, mellyloonDbgFrames - f0));
             worst = jmin (worst, fps);
         };
         run ("default: 4 grains orbiting");
@@ -1394,7 +1405,7 @@ int main (int argc, char** argv)
         run (pitchThenRing, a3, j3, true);
         std::printf ("the shelf: pitch then ring mod -> 1868 Hz at %.4f; ring mod then pitch -> %.4f; reordering mid-sound: biggest step %.4f (steady %.4f); saved %d\n",
                      a1, a2, j3, j1, saved);
-        if (a1 < 0.005 || a2 > a1 * 0.2 || j3 > j1 * 2.0f + 0.01f || ! saved) FAIL_HERE();
+        if (a1 < 0.003 || a2 > a1 * 0.2 || j3 > j1 * 2.0f + 0.01f || ! saved) FAIL_HERE();   // (an absolute level: in the sphere it moves with the room round the bubble)
     }
 
     // Trixie's noise: into the input, so it goes through the effects; a different sound every visit, a chirp
@@ -1993,7 +2004,7 @@ int main (int argc, char** argv)
             const bool back = *p.apvts.getRawParameterValue (ids::balloonSfx) > 0.5f;
             std::printf ("tokens: %d; pop sounds at the top of the help and reset list in their style %d, click flips it %d and back %d; help and reset in the top right corner %d\n",
                          FreakieTestAccess::numPills (e), placed, flipped, back, corner);
-            if (FreakieTestAccess::numPills (e) != 6 || ! placed || ! flipped || ! back || ! corner) FAIL_HERE();
+            if (FreakieTestAccess::numPills (e) != 7 || ! placed || ! flipped || ! back || ! corner) FAIL_HERE();
         }
         shoot ("_tokens1.png");
         {
@@ -2285,6 +2296,27 @@ int main (int argc, char** argv)
             std::printf ("cloudy %d (clouds %.2f): density inside a cloud %.3f -> %.3f (wandered %.2f in 8 s), drifting %d, stopped once it left %d\n",
                          cloudyOn, FreakieTestAccess::cloudVis (e), before, after, travelled, drifted, stoppedDrifting);
             if (! cloudyOn || travelled < 0.08f || travelled > 0.6f || ! drifted || ! stoppedDrifting) FAIL_HERE();
+
+            // the tokens on the right wander in the clouds too: distance (a knob) drifts, flight (a choice) steps
+            {
+                auto* dist = p.apvts.getParameter (ids::spread);
+                auto* fl = p.apvts.getParameter (ids::flight);
+                auto* dop = p.apvts.getParameter (ids::doppler);
+                float tr = 0.0f, lastD = dist->getValue();
+                const float fl0 = fl->getValue(), dop0 = dop->getValue();
+                bool flStepped = false;
+                for (int k = 0; k < 14 * 60; ++k)
+                {
+                    FreakieTestAccess::run (e, 1.0f / 60.0f);
+                    tr += std::abs (dist->getValue() - lastD); lastD = dist->getValue();
+                    flStepped |= std::abs (fl->getValue() - fl0) > 1.0e-4f;
+                }
+                const bool dopStill = dop->getValue() == dop0;
+                std::printf ("cloudy tokens: distance wandered %.2f in 14 s, flight stepped %d, doppler switch left alone %d, %d tokens\n",
+                             tr, flStepped, dopStill, FreakieTestAccess::numPills (e));
+                if (tr < 0.08f || ! flStepped || ! dopStill) FAIL_HERE();
+                fl->setValueNotifyingHost (fl0);
+            }
 
             p.apvts.getParameter (ids::rain)->setValueNotifyingHost (1.0f);
             const size_t baseline = FreakieTestAccess::storeBalloonsAlive (e).size();

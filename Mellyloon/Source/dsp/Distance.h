@@ -25,6 +25,9 @@ class DistanceSource
 {
 public:
     static constexpr int kTaps = 7;   // direct + 6 walls
+    // Doppler off: a moving sound's delays may only drift (at most 0.15 % speed, under 3 cents), so it
+    // keeps its pitch; the distance still sounds the same
+    bool doppler = true;
     static inline bool withWalls = true;   // (a test turns the walls off to check the direct path alone)
     static constexpr float refMetres = 4.0f;   // at 4 m a sound is at unity; nearer louder (up to +12 dB), further quieter (1 / distance)
 
@@ -32,7 +35,7 @@ public:
     {
         sr = sampleRate;
         size = 1;
-        while (size < (int) (0.45 * sr) + maxBlock + 8) size <<= 1;   // up to ~150 m of path
+        while (size < (int) (0.9 * sr) + maxBlock + 8) size <<= 1;    // up to ~300 m of path (a 50 m bubble's walls)
         ring.assign ((size_t) size, 0.0f);
         tmp.assign ((size_t) std::max (1, maxBlock), 0.0f);
         w = 0; fresh = true;
@@ -65,9 +68,11 @@ public:
             const float a = 1.0f - std::exp (-(float) kTwoPi * std::min (air, (float) sr * 0.45f) / (float) sr);
             ambi::Coefs c = k == 0 ? ambi::encodeNear (posTo) : ambi::sh (img[k].normalised());
             if (fresh) { t.delay = delay; t.gain = gain; t.coef = c; t.a = a; }
+            float delayTo = delay;
+            if (! doppler) delayTo = std::clamp (delay, t.delay - 0.0015f * (float) n, t.delay + 0.0015f * (float) n);
 
             // the path: read back along the ring (gliding the delay), filter, level
-            const float d0 = t.delay, dd = (delay - d0) * inv, g0 = t.gain, dg = (gain - g0) * inv;
+            const float d0 = t.delay, dd = (delayTo - d0) * inv, g0 = t.gain, dg = (gain - g0) * inv;
             float lp = t.lp;
             for (int i = 0; i < n; ++i)
             {
@@ -77,7 +82,7 @@ public:
                 tmp[(size_t) i] = lp * (g0 + dg * (float) (i + 1));
             }
             t.lp = flushDenormal (lp);
-            t.delay = delay; t.gain = gain; t.a = a;
+            t.delay = delayTo; t.gain = gain; t.a = a;
 
             // into the 16 channels, the gains gliding from the last block's direction
             for (int ch = 0; ch < ambi::kCh; ++ch)

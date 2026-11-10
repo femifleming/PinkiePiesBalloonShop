@@ -28,14 +28,17 @@ struct Run { std::vector<std::vector<float>> out; double seconds = 0, cpu = 0; b
 
 // run the processor on noise (or a function) for 'seconds', 'outCh' output channels
 template <typename Gen>
-static Run render (FreakiePieProcessor& p, int outCh, double seconds, Gen gen, bool keep = true)
+static Run render (FreakiePieProcessor& p, int outCh, double seconds, Gen gen, bool keep = true, bool fresh = true)
 {
-    juce::AudioProcessor::BusesLayout layout;
-    layout.inputBuses.add (juce::AudioChannelSet::stereo());
-    layout.outputBuses.add (outCh == 16 ? juce::AudioChannelSet::discreteChannels (16) : juce::AudioChannelSet::stereo());
-    p.setBusesLayout (layout);
-    p.setRateAndBufferSizeDetails (SR, BLOCK);
-    p.prepareToPlay (SR, BLOCK);
+    if (fresh)   // (fresh = false carries on from the last render without preparing again)
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::stereo());
+        layout.outputBuses.add (outCh == 16 ? juce::AudioChannelSet::discreteChannels (16) : juce::AudioChannelSet::stereo());
+        p.setBusesLayout (layout);
+        p.setRateAndBufferSizeDetails (SR, BLOCK);
+        p.prepareToPlay (SR, BLOCK);
+    }
     const int total = (int) (seconds * SR);
     juce::AudioBuffer<float> buf (std::max (2, outCh), BLOCK);
     juce::MidiBuffer midi;
@@ -313,7 +316,7 @@ int main (int argc, char** argv)
             return rms (out.out[0], (size_t) SR / 2);
         };
         const double small = bubbleLevel (0.0f), big = bubbleLevel (1.0f);
-        check (db (small / big) > 15.0, "a small bubble (1.5 m) is much louder than a big one (24 m)", juce::String (db (small / big), 1) + " dB");
+        check (db (small / big) > 20.0, "a small bubble (1 m) is much louder than a big one (50 m)", juce::String (db (small / big), 1) + " dB");
 
         // time: the sound arrives distance / 343 m/s later, and the walls answer after it
         fp::DistanceSource ds;
@@ -354,6 +357,45 @@ int main (int argc, char** argv)
         for (size_t i = (size_t) (0.1 * SR); i < (size_t) (0.4 * SR); ++i) if (w[i] <= 0 && w[i + 1] > 0) ++zc;
         const double hz = zc / 0.3;
         check (std::abs (hz - 1000.0 / (1.0 - 24.0 / 343.0)) < 20.0, "flying in at 24 m/s, 1 kHz sounds at 1075 Hz (Doppler)", juce::String (hz, 1) + " Hz");
+
+        // Doppler off: the same flight keeps its pitch
+        auto flyIn = [&] (bool dop)
+        {
+            fp::DistanceSource d2;
+            d2.prepare (SR, BLOCK);
+            d2.doppler = dop;
+            fp::DistanceSource::withWalls = false;
+            std::vector<float> w2 ((size_t) SR, 0.0f);
+            for (int pos = 0; pos + BLOCK <= (int) SR; pos += BLOCK)
+            {
+                for (int i = 0; i < BLOCK; ++i) in[(size_t) i] = (float) std::sin (2.0 * juce::MathConstants<double>::pi * 1000.0 * (pos + i) / SR);
+                const float r = std::max (0.05f, 1.0f - (float) (pos + BLOCK) / (float) (0.5 * SR));
+                float* op[16]; for (int c = 0; c < 16; ++c) { std::fill (o2[(size_t) c].begin(), o2[(size_t) c].end(), 0.0f); op[c] = o2[(size_t) c].data(); }
+                d2.process (in.data(), BLOCK, { r, 0.0f, 0.0f }, 12.0f, op, nullptr, 0.0f);
+                std::copy (o2[0].begin(), o2[0].end(), w2.begin() + pos);
+            }
+            fp::DistanceSource::withWalls = true;
+            int z = 0;
+            for (size_t i = (size_t) (0.1 * SR); i < (size_t) (0.4 * SR); ++i) if (w2[i] <= 0 && w2[i + 1] > 0) ++z;
+            return z / 0.3;
+        };
+        const double still = flyIn (false);
+        check (std::abs (still - 1000.0) < 6.0, "Doppler off: the same flight stays at 1 kHz", juce::String (still, 1) + " Hz");
+
+        // 50 m: the biggest bubble's far side and its walls still fit in the delay line
+        fp::DistanceSource far;
+        far.prepare (SR, BLOCK);
+        std::vector<std::vector<float>> o3 (16, std::vector<float> ((size_t) (0.6 * SR), 0.0f));
+        for (int pos = 0; pos + BLOCK <= (int) o3[0].size(); pos += BLOCK)
+        {
+            std::fill (in.begin(), in.end(), 0.0f);
+            if (pos == 0) in[0] = 1.0f;
+            float* op[16]; for (int c = 0; c < 16; ++c) op[c] = o3[(size_t) c].data() + pos;
+            far.process (in.data(), BLOCK, { 1.0f, 0.0f, 0.0f }, 50.0f, op, nullptr, 0.0f);
+        }
+        int pk = 0; double bst = 0;
+        for (size_t i = 0; i < o3[0].size(); ++i) if (std::abs (o3[0][i]) > bst) { bst = std::abs (o3[0][i]); pk = (int) i; }
+        check (std::abs (pk - 50.0 / 343.0 * SR) < 3.0, "50 m away it arrives 146 ms later", juce::String (pk / SR * 1000.0, 1) + " ms");
     }
 
     std::printf ("the granulator\n");
@@ -510,8 +552,8 @@ int main (int argc, char** argv)
 
     std::printf ("many grains, every way of flying, all the weather\n");
     {
-        const char* names[] = { "still", "orbit", "lorenz", "flock", "random" };
-        for (int mode = 0; mode < 5; ++mode)
+        const char* names[] = { "still", "orbit", "lorenz", "flock", "random", "spiral", "lissajous", "rossler", "breathe", "fall", "ping-pong" };
+        for (int mode = 0; mode < 11; ++mode)
         {
             FreakiePieProcessor p;
             p.setCurrentProgram (0);
@@ -537,6 +579,15 @@ int main (int argc, char** argv)
                    "peak " + juce::String (db (r.peak), 1) + " dBFS, " + juce::String (rt * 100.0, 1) + " % of real time, inside r <= " + juce::String (maxR, 2)
                    + ", closest pair " + juce::String (minD, 2));
             check (maxR <= 1.0001f, "stays inside the sphere");
+            if (mode > 0)
+            {
+                std::vector<Vec3> before;
+                for (int a = 0; a < 16; ++a) before.push_back ({ p.grainView[(size_t) a].x.load(), p.grainView[(size_t) a].y.load(), p.grainView[(size_t) a].z.load() });
+                render (p, 16, 1.5, plucks, false, false);
+                float moved = 0;
+                for (int a = 0; a < 16; ++a) moved = std::max (moved, (Vec3 { p.grainView[(size_t) a].x.load(), p.grainView[(size_t) a].y.load(), p.grainView[(size_t) a].z.load() } - before[(size_t) a]).length());
+                check (moved > 0.05f, "and the grains fly", "furthest move in 1.5 s " + juce::String (moved, 2));
+            }
         }
     }
 
