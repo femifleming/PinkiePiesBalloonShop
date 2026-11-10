@@ -95,8 +95,8 @@ FIGS_COMMON = {
                 ("heat", "A heatwave."),
                 ("heat_fades", "Right-click the snow or the heat for its fade times."),
                 ("wet", "Rain in the heat: Pinkie soaked through.")],
-    "Sonic rainboom": [("rainboom_dive", "The dive: speed lines and the streak with its rainbow tail."),
-                       ("rainboom_boom", "The boom: the flash and the ring of seven colours."),
+    "Sonic rainboom": [("rainboom_dive", "The dive: Rainbow Dash speeding in, the rainbow streaming out behind her."),
+                       ("rainboom_boom", "The boom: the starburst and the ring of seven colours. Pinkie jumps, amazed."),
                        ("rainboom_ring", "The ring opening out; the shockwave has knocked the balloons back."),
                        ("rainboom_rainbow", "The rainbow left in the sky, fading over the rainbow's length.")],
     "The balloon store": [("store", "The balloon store."), ("store_shelves", "Its shelves.")],
@@ -346,7 +346,7 @@ def credits_section(cfg):
     if cfg["key"] == "melly":
         extra = "<p>The ambisonic conventions follow the IEM Plug-in Suite and SPARTA; the energy map follows the IEM EnergyVisualizer; the distance model follows the IEM RoomEncoder and the reverb the IEM FdnReverb. The source-spread and distance ideas were checked against s3g-dsp. No code from these is included.</p>"
     return f"""<h2 id='credits'>Credits and license</h2>
-<p>This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators.</p>
+<p>This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators. The flying Rainbow Dash is by Nightmare Moon.</p>
 <p>The balloon-store effects are rebuilt from Olivier Bélanger's SoundGrain (the phaser replaces its flanger). The gumball machine, the ring mod and the bouncing plucks take their ideas from Alexander Mesker's thesis <i>Analysis and recreation of key features in selected Autechre tracks from 1998-2005</i> (Macquarie University, 2007).</p>
 {extra}
 <p>Built with JUCE. The code is released under the GNU Affero General Public License v3, as JUCE's free licence requires. The artwork is not covered by it.</p>

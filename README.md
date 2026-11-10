@@ -115,7 +115,7 @@ Pinkie Pie's Balloon Shop's code was written with Claude Code (Anthropic), worki
 
 ## Credits and notes
 
-- This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators.
+- This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators. The flying Rainbow Dash is by Nightmare Moon.
 - The balloon-store effects are rebuilt from Olivier Bélanger's SoundGrain (the phaser replaces its flanger).
 - The gumball machine, the ring mod and the bouncing plucks take their ideas from Alexander Mesker's thesis *Analysis and recreation of key features in selected Autechre tracks from 1998-2005* (Macquarie University, 2007).
 - Built with [JUCE](https://juce.com).

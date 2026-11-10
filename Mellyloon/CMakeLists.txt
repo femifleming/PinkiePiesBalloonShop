@@ -62,7 +62,7 @@ juce_add_binary_data(MellyloonAssets SOURCES
     ${SHOP_DIR}/Resources/pinkie_sitting.png ${SHOP_DIR}/Resources/pinkie_umbrella.png ${SHOP_DIR}/Resources/pinkie_crystal.png ${SHOP_DIR}/Resources/cheerilee.png
     ${SHOP_DIR}/Resources/pinkie_cower.png ${SHOP_DIR}/Resources/pinkie_scared.png ${SHOP_DIR}/Resources/pinkie_sleep.png
     ${SHOP_DIR}/Resources/pinkie_snow.png ${SHOP_DIR}/Resources/pinkie_cold.png ${SHOP_DIR}/Resources/pinkie_heat.png ${SHOP_DIR}/Resources/pinkie_wet.png
-    ${SHOP_DIR}/Resources/library.jpg ${SHOP_DIR}/Resources/twilight_reading.png ${SHOP_DIR}/Resources/trixie.png ${SHOP_DIR}/Resources/mlp_magic_is_friendship.ttf
+    ${SHOP_DIR}/Resources/library.jpg ${SHOP_DIR}/Resources/twilight_reading.png ${SHOP_DIR}/Resources/trixie.png ${SHOP_DIR}/Resources/rainbow_dash.png ${SHOP_DIR}/Resources/pinkie_wow.png ${SHOP_DIR}/Resources/mlp_magic_is_friendship.ttf
     ${SPH_BACKGROUNDS})
 
 target_link_libraries(Mellyloon

@@ -133,5 +133,6 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           name: Mellyloon (spatial audio) ${{ github.ref_name }}
+          make_latest: false   # (the repo's "latest" release stays the Balloon Shop's: its README links to it)
           files: packages/*
           generate_release_notes: true

@@ -88,7 +88,7 @@ Mellyloon's code was written with Claude Code (Anthropic), working under the dir
 
 ## Credits and notes
 
-- This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators.
+- This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators. The flying Rainbow Dash is by Nightmare Moon.
 - The ambisonic conventions follow the IEM Plug-in Suite and SPARTA; the energy map follows the IEM EnergyVisualizer. The source-spread and distance ideas were checked against s3g-dsp. No code from these is included.
 - The balloon-store effects are rebuilt from Olivier Bélanger's SoundGrain; the gumball machine, the ring mod and the bouncing plucks take their ideas from Alexander Mesker's thesis on Autechre (Macquarie University, 2007).
 - Built with [JUCE](https://juce.com).

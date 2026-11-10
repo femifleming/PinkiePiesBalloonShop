@@ -854,6 +854,8 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
     pinkieUmbrella = ImageCache::getFromMemory (BinaryData::pinkie_umbrella_png, BinaryData::pinkie_umbrella_pngSize);
     pinkieCower = ImageCache::getFromMemory (BinaryData::pinkie_cower_png, BinaryData::pinkie_cower_pngSize);
     pinkieScared = ImageCache::getFromMemory (BinaryData::pinkie_scared_png, BinaryData::pinkie_scared_pngSize);
+    pinkieWow = ImageCache::getFromMemory (BinaryData::pinkie_wow_png, BinaryData::pinkie_wow_pngSize);
+    rainbowDash = ImageCache::getFromMemory (BinaryData::rainbow_dash_png, BinaryData::rainbow_dash_pngSize);
     pinkieSleep = ImageCache::getFromMemory (BinaryData::pinkie_sleep_png, BinaryData::pinkie_sleep_pngSize);
     pinkieCrystal = ImageCache::getFromMemory (BinaryData::pinkie_crystal_png, BinaryData::pinkie_crystal_pngSize);
     pinkieSnow = ImageCache::getFromMemory (BinaryData::pinkie_snow_png, BinaryData::pinkie_snow_pngSize);
@@ -1432,6 +1434,7 @@ void FreakiePieEditor::drawPinkie (Graphics& g) const
     g.setColour (Colours::black.withAlpha (0.3f * sh));
     g.fillEllipse (Rectangle<float> ((92.0f + 40.0f * sleepVis) * sh, 9.0f * sh).withCentre ({ pinkieX + 4.0f + 14.0f * sleepVis, baseY - 1.0f }));
 
+    float moodScale = 1.0f - wowVis;   // (a rainboom's surprise takes over from every other mood)
     auto drawAt = [&] (const Image& img, Rectangle<float> area, float alpha)
     {
         if (alpha <= 0.001f || ! img.isValid()) return;
@@ -1439,7 +1442,7 @@ void FreakiePieEditor::drawPinkie (Graphics& g) const
                             .translated (area.getX() - pinkieX, area.getY() - baseY)
                             .scaled (sx, sy)
                             .translated (pinkieX + shiver, baseY);
-        g.setOpacity (alpha);
+        g.setOpacity (alpha * moodScale);
         g.drawImageTransformed (img, tr, false);
     };
     auto sized = [&] (const Image& img, float w, float dx)
@@ -1485,6 +1488,8 @@ void FreakiePieEditor::drawPinkie (Graphics& g) const
     drawAt (pinkieSleep, sized (pinkieSleep, 136.0f, -6.0f), asleep);
     if (scaredAlt) drawAt (pinkieCower, sized (pinkieCower, 138.0f, 8.0f), scared);
     else           drawAt (pinkieScared, sized (pinkieScared, 104.0f, 0.0f), scared);
+    moodScale = 1.0f;
+    drawAt (pinkieWow, sized (pinkieWow, 118.0f, 4.0f), wowVis);
     g.setOpacity (1.0f);
 
     // z z z
@@ -2369,10 +2374,10 @@ namespace
           "A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.\n\n"
           "With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there." },
         { "Sonic rainboom",
-          "The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and something dives in from the sky, faster and faster, until it breaks the sound barrier: a boom and a rainbow at the same moment.\n\n"
+          "The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and Rainbow Dash dives in from the sky, faster and faster, the rainbow streaming out behind her, until she breaks the sound barrier: a boom and a rainbow at the same moment.\n\n"
           "On the way in your sound is squeezed up in pitch, the way a sound rushing towards you would be, with a rush of air under it. The boom has the real shape of a sonic boom, a double crack. "
           "Then the rainbow: your sound split into seven colours, red the lowest and violet the highest. They arrive one after another, so they sweep up from the lows to the highs, and each one keeps ringing for the rainbow's length while the rainbow fades from the sky.\n\n"
-          "The shockwave knocks the balloons back, and the ones nearest it are nudged to new values.\n\n"
+          "The shockwave knocks the balloons back, and the ones nearest it are nudged to new values. Pinkie jumps, amazed.\n\n"
           "Fling a balloon hard enough and it breaks the barrier itself: a white cone grows behind it as you get close. Right-click the cloud for what else sets one off, such as a hit in your sound or the rain stopping after a storm. "
           "The same menu sets how loud it is and how long the rainbow lasts."
           "\n\nIn the sphere it all happens in 3-D. The dive flies in from outside the glass to where it breaks, and the boom comes from there. Then seven rings open out flat round it, red outermost. "
@@ -3973,13 +3978,15 @@ void FreakiePieEditor::timerCallback()
     if (clock - lastSave > 2.0) { lastSave = clock; proc.saveLastState(); }
     {
         const bool scared = clock < scaredUntil;
+        const bool wow = clock < wowUntil;   // a rainboom: she jumps, amazed
         // how long she's been out in the snow: a minute and she's got a cold (too poorly to doze off) until it goes
         if (snowVis > 0.3f) { if (snowSince < 0.0) snowSince = clock; }
         else snowSince = -1.0;
         const bool hasCold = snowSince >= 0.0 && clock - snowSince > coldAfter;
-        const bool asleep = ! scared && ! hasCold && clock - lastActivity > sleepAfter;
+        const bool asleep = ! scared && ! wow && ! hasCold && clock - lastActivity > sleepAfter;
         auto toward = [dt] (float& v, bool on, float speed) { v += ((on ? 1.0f : 0.0f) - v) * jmin (1.0f, dt * speed); };
         toward (scaredVis, scared, 14.0f);
+        toward (wowVis, wow, 14.0f);
         toward (sleepVis, asleep, 1.5f);
         const bool hotRain = rainVis > 0.3f && heatVis > 0.3f;   // rain in a heatwave: no umbrella, she's soaked and flat out
         toward (wetVis, ! scared && ! asleep && hotRain, 1.5f);
@@ -6855,7 +6862,8 @@ void FreakiePieEditor::shockwave (Vec3 at)
             if (dist < 0.9f * sphereR && FreakiePieProcessor::trixieMayTouch (bl->parameter().getParameterID()))
                 bl->nudge ((rnd.nextFloat() - 0.5f) * 0.3f * (1.0f - dist / (0.9f * sphereR)));
     }
-    pinkieHopVel = jmax (pinkieHopVel, 260.0f);
+    pinkieHopVel = jmax (pinkieHopVel, 320.0f);
+    wowUntil = clock + 2.8;   // amazed
     noteActivity();
 }
 
@@ -6893,8 +6901,23 @@ void RainboomLayer::paint (Graphics& g)
             g.setColour (Colours::white.withAlpha (0.1f + 0.3f * u * u));
             g.drawLine ({ a, e }, 1.2f + 1.2f * r.nextFloat());
         }
-        rbart::ribbon (g, pts, 14.0f + 16.0f * u, 1.0f, 0.0f, time);
-        rbart::comet (g, head, dir, u, time, ! thrown);
+        if (thrown || ! ed.rainbowDash.isValid())
+        {
+            rbart::ribbon (g, pts, 14.0f + 16.0f * u, 1.0f, 0.0f, time);
+            rbart::comet (g, head, dir, u, time, ! thrown);
+        }
+        else
+        {
+            // Rainbow Dash out in front (nearer, bigger), the rainbow streaming from her tail
+            float kh = 1.0f;
+            P (ed.rbFlyer(), &kh);
+            const float dw = 135.0f * jlimit (0.6f, 1.6f, kh);
+            Point<float> tail;
+            const auto T = rbart::dashPlace (ed.rainbowDash, head, dir, dw, &tail);
+            rbart::ribbon (g, rbart::trailToTail (pts, head, tail, dw * 0.7f), (14.0f + 16.0f * u) * jlimit (0.6f, 1.6f, kh), 1.0f, 0.0f, time, false);
+            rbart::comet (g, head, dir, u, time, false, false);
+            rbart::dash (g, ed.rainbowDash, T);
+        }
     }
 
     const float t = (float) (now - b.boomTime);
@@ -6942,6 +6965,14 @@ void RainboomLayer::paint (Graphics& g)
         }
         rbart::burst (g, at, t, jlimit (0.6f, 1.5f, k0));
         rbart::sparkles (g, at, t, ed.rbBoomsSeen, jlimit (0.6f, 1.4f, k0));
+        // and she's gone, out of the picture the way she was going
+        if (b.hasDive && ! thrown && t < 0.7f && b.trail.size() > 2)
+        {
+            auto d = at - P (b.trail[b.trail.size() - 3]);
+            d /= jmax (1.0f, d.getDistanceFromOrigin());
+            rbart::dash (g, ed.rainbowDash, rbart::dashPlace (ed.rainbowDash, at + d * (1900.0f * t), d, 135.0f * jlimit (0.6f, 1.6f, k0)),
+                         1.0f - rbart::smooth01 ((t - 0.35f) / 0.35f));
+        }
     }
 }
 

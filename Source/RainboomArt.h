@@ -47,7 +47,7 @@ inline std::vector<Point<float>> smoothLine (const std::vector<Point<float>>& p,
 
 // the rainbow trail. width: across all seven bands at its widest; fade: 0..1, how much of it (from
 // its tail end) has faded away; time: for the flutter
-inline void ribbon (Graphics& g, const std::vector<Point<float>>& pts, float width, float alpha, float fade, float time)
+inline void ribbon (Graphics& g, const std::vector<Point<float>>& pts, float width, float alpha, float fade, float time, bool roundHead = true)
 {
     const auto c = smoothLine (pts);
     const int n = (int) c.size();
@@ -104,7 +104,8 @@ inline void ribbon (Graphics& g, const std::vector<Point<float>>& pts, float wid
     }
     g.setGradientFill (along (juce::Colours::white, 0.45f * alpha));
     g.fillPath (strip (-0.36f, -0.3f));
-    // a round head where it ends
+    // a round head where it ends (not when it streams out of Rainbow Dash's tail)
+    if (! roundHead) return;
     const auto h = c.back();
     for (int k = 0; k < 7; ++k)
     {
@@ -138,10 +139,12 @@ inline void trailSparkles (Graphics& g, const std::vector<Point<float>>& pts, fl
 }
 
 // the flyer: dir is where it's heading (unit); u how far through the dive (0..1)
-inline void comet (Graphics& g, Point<float> head, Point<float> dir, float u, float time, bool flyer = true)
+inline void comet (Graphics& g, Point<float> head, Point<float> dir, float u, float time, bool flyer = true, bool glow = true)
 {
     const auto side = Point<float> (-dir.y, dir.x);
     // the white teardrop glow behind it
+    if (glow)
+    {
     Path tear;
     const float len = 40.0f + 70.0f * u, wd = 14.0f;
     tear.startNewSubPath (head + dir * 12.0f);
@@ -149,6 +152,7 @@ inline void comet (Graphics& g, Point<float> head, Point<float> dir, float u, fl
     tear.cubicTo (head - dir * (len * 0.4f) - side * wd, head + dir * 12.0f - side * wd, head + dir * 12.0f);
     g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.85f), head, juce::Colours::white.withAlpha (0.0f), head - dir * len, false));
     g.fillPath (tear);
+    }
     // the sound barrier: a white cone forming round the nose, with jagged shock lines
     if (u > 0.5f)
     {
@@ -283,5 +287,40 @@ inline void sparkles (Graphics& g, Point<float> at, float t, int seed, float sca
         g.setColour (col.withAlpha (life * 0.95f));
         g.fillPath (st);
     }
+}
+
+// Rainbow Dash flying it: where to draw her so her front hooves are at 'nose' and she flies along
+// 'dir' (flipped when she's heading right, so she's never upside down). tailOut: where her tail is,
+// for the rainbow to stream out of. In the picture she flies down to the left, her front hooves at
+// (1 %, 86 %) of it and her tail's tip at (97 %, 6 %).
+inline juce::AffineTransform dashPlace (const juce::Image& img, Point<float> nose, Point<float> dir, float width, Point<float>* tailOut = nullptr)
+{
+    const float W = (float) juce::jmax (1, img.getWidth()), H = (float) juce::jmax (1, img.getHeight());
+    const bool flip = dir.x > 0.0f;
+    Point<float> front (0.01f * W, 0.86f * H), tail (0.97f * W, 0.06f * H);
+    auto T = flip ? juce::AffineTransform::scale (-1.0f, 1.0f).translated (W, 0.0f) : juce::AffineTransform();
+    auto f = front, tl = tail;
+    if (flip) { f.x = W - f.x; tl.x = W - tl.x; }
+    const auto axis = f - tl;
+    const float turn = std::atan2 (dir.y, dir.x) - std::atan2 (axis.y, axis.x);
+    T = T.translated (-f.x, -f.y).scaled (width / W).rotated (turn).translated (nose.x, nose.y);
+    if (tailOut != nullptr) { float x = tail.x, y = tail.y; T.transformPoint (x, y); *tailOut = { x, y }; }
+    return T;
+}
+
+inline void dash (Graphics& g, const juce::Image& img, const juce::AffineTransform& T, float alpha = 1.0f)
+{
+    if (! img.isValid() || alpha <= 0.01f) return;
+    g.setOpacity (alpha);
+    g.drawImageTransformed (img, T, false);
+    g.setOpacity (1.0f);
+}
+
+// the trail up to her tail: drop the points she's covering, end at the tail
+inline std::vector<Point<float>> trailToTail (std::vector<Point<float>> pts, Point<float> nose, Point<float> tail, float covered)
+{
+    while (pts.size() > 2 && pts.back().getDistanceFrom (nose) < covered) pts.pop_back();
+    pts.push_back (tail);
+    return pts;
 }
 } // namespace rbart

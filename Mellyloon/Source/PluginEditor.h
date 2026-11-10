@@ -687,6 +687,9 @@ private:
     // alone for a while and she falls asleep
     double scaredUntil = -1.0, lastActivity = 0.0;
     bool scaredAlt = false;
+    juce::Image pinkieWow, rainbowDash;          // the rainboom: Pinkie startled mid-jump, and Rainbow Dash flying it in
+    double wowUntil = -1.0;
+    float wowVis = 0.0f;
     float scaredVis = 0.0f, sleepVis = 0.0f, umbrellaVis = 0.0f, crystalVis = 0.0f, snowyVis = 0.0f, coldVis = 0.0f, meltVis = 0.0f, wetVis = 0.0f;
     static constexpr double sleepAfter = 45.0;
     static constexpr double coldAfter = 60.0;   // a minute out in the snow and she catches a cold

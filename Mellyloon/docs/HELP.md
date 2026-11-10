@@ -205,17 +205,17 @@ With auto weather on, the sky looks after itself. Every few minutes the weather 
 
 ## Sonic rainboom
 
-The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and something dives in from the sky, faster and faster, until it breaks the sound barrier: a boom and a rainbow at the same moment.
+The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and Rainbow Dash dives in from the sky, faster and faster, the rainbow streaming out behind her, until she breaks the sound barrier: a boom and a rainbow at the same moment.
 
 On the way in your sound is squeezed up in pitch, the way a sound rushing towards you would be, with a rush of air under it. The boom has the real shape of a sonic boom, a double crack. Then the rainbow: your sound split into seven colours, red the lowest and violet the highest. They arrive one after another, so they sweep up from the lows to the highs, and each one keeps ringing for the rainbow's length while the rainbow fades from the sky.
 
-The shockwave knocks the balloons back, and the ones nearest it are nudged to new values.
+The shockwave knocks the balloons back, and the ones nearest it are nudged to new values. Pinkie jumps, amazed.
 
 Fling a balloon hard enough and it breaks the barrier itself: a white cone grows behind it as you get close. Right-click the cloud for what else sets one off, such as a hit in your sound or the rain stopping after a storm. The same menu sets how loud it is and how long the rainbow lasts.
 
 In the sphere it all happens in 3-D. The dive flies in from outside the glass to where it breaks, and the boom comes from there. Then seven rings open out flat round it, red outermost. A ring off to one side sounds like an arc over there; as it passes over you it surrounds you, and then it leaves through the glass. With on fast grains ticked, a grain flying faster than 30 metres a second breaks it where it is.
 
-![The rainboom in the sphere](help/sphere_rainboom.jpg)
+![Rainbow Dash diving into the sphere](help/sphere_rainboom.jpg)
 
 ## The balloon store
 
