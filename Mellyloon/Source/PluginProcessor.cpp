@@ -1091,7 +1091,9 @@ void FreakiePieProcessor::rainboomBlock (const float* inL, const float* inR, flo
         if (rbFollowGrain >= 0) rbAt = flightPaths.position (rbFollowGrain);
         else if (rbFollowTarget) rbAt = { rbTargetX.load(), rbTargetY.load(), rbTargetZ.load() };
         const float u = rainboom.diveProgress();
-        rbNow = rbFrom + (rbAt - rbFrom) * (u * u);
+        const float e = u * u, v = 1.0f - e;   // (faster and faster, on a swoop down and up into it)
+        const auto ctrl = (rbFrom + rbAt) * 0.5f + fp::ambi::Vec3 { 0.0f, 0.0f, -0.8f };
+        rbNow = rbFrom * (v * v) + ctrl * (2.0f * v * e) + rbAt * (e * e);
     }
 
     // what it colours: everything the sphere is playing (its W)

@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "RainboomArt.h"
 #include <BinaryData.h>
 
 using namespace juce;
@@ -5564,8 +5565,12 @@ Point<float> FreakiePieEditor::boomHead() const
     const auto& b = boomScene;
     if (rbThrown != nullptr && clock - rbThrownAt < b.diveLen + 0.5) return rbThrown->pos;
     const float u = jlimit (0.0f, 1.0f, (float) ((clock - b.diveStart) / jmax (0.05, b.diveLen)));
-    const Point<float> ctrl ((b.from.x + b.at.x) * 0.5f, b.at.y + 40.0f);
-    return bezier (b.from, ctrl, b.at, u * u);   // faster and faster
+    // a cartoon swoop: down past where it'll break, then up into it, faster and faster
+    const float side = b.at.x > b.from.x ? 1.0f : -1.0f;
+    const Point<float> c1 (b.from.x * 0.25f + b.at.x * 0.75f - side * 60.0f, b.at.y + 230.0f);
+    const Point<float> c2 (b.at.x - side * 170.0f, b.at.y + 150.0f);
+    const float e = u * u, v = 1.0f - e;
+    return b.from * (v * v * v) + c1 * (3.0f * v * v * e) + c2 * (3.0f * v * e * e) + b.at * (e * e * e);
 }
 
 void FreakiePieEditor::rainboomStep (float)
@@ -5654,143 +5659,77 @@ void RainboomLayer::paint (Graphics& g)
     const auto& b = ed.boomScene;
     const double now = ed.clock;
     const float W = (float) FreakiePieEditor::designW, H = (float) FreakiePieEditor::designH;
+    const float time = (float) now;
 
     // a balloon flung fast: a white cone behind it, growing as it nears the barrier
     if (ed.rbCharging != nullptr)
     {
-        const auto p = ed.rbCharging->pos;
         const auto v = ed.rbCharging->flickVel;
         const float sp = jmax (1.0f, v.getDistanceFromOrigin());
-        const auto back = -v / sp, side = Point<float> (-back.y, back.x);
-        const float len = 40.0f + 110.0f * ed.rbCharge, wide = 34.0f * (1.2f - ed.rbCharge);
-        Path cone;
-        cone.startNewSubPath (p + back * 10.0f);
-        cone.lineTo (p + back * len + side * wide);
-        cone.lineTo (p + back * len - side * wide);
-        cone.closeSubPath();
-        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.75f * ed.rbCharge), p, Colours::white.withAlpha (0.0f), p + back * len, false));
-        g.fillPath (cone);
+        rbart::comet (g, ed.rbCharging->pos, v / sp, 0.5f + 0.5f * ed.rbCharge, time, false);
     }
 
-    // the dive: speed lines, then the streak with its rainbow tail and, near the end, the cone
+    // the dive: speed lines, the rainbow ribbon behind the flyer, the flyer with its cone
     const float u = (float) ((now - b.diveStart) / jmax (0.05, b.diveLen));
     const bool thrown = ed.rbThrown != nullptr && now - ed.rbThrownAt < b.diveLen + 0.5;
     if (b.hasDive && u >= 0.0f && u < 1.0f)
     {
         const auto head = ed.boomHead();
-        Point<float> dir = b.at - b.from;
-        if (b.trail.size() > 1) dir = b.trail.back() - b.trail[b.trail.size() - 2];
-        const float dl = jmax (1.0f, dir.getDistanceFromOrigin());
-        dir /= dl;
+        auto pts = b.trail;
+        pts.push_back (head);
+        Point<float> dir (1.0f, 0.0f);
+        if (pts.size() > 2) dir = head - pts[pts.size() - 3];
+        dir /= jmax (1.0f, dir.getDistanceFromOrigin());
         Random r (7);
         for (int i = 0; i < 18; ++i)   // speed lines across the sky, along the dive
         {
             const Point<float> c (r.nextFloat() * W, r.nextFloat() * H);
-            const float shift = std::fmod ((float) now * 1400.0f + 300.0f * (float) i, 1600.0f) - 800.0f;
+            const float shift = std::fmod (time * 1400.0f + 300.0f * (float) i, 1600.0f) - 800.0f;
             const auto a = c + dir * shift, e = a + dir * (60.0f + 120.0f * u);
-            g.setColour (Colours::white.withAlpha (0.12f + 0.3f * u * u));
-            g.drawLine ({ a, e }, 1.4f);
+            g.setColour (Colours::white.withAlpha (0.1f + 0.3f * u * u));
+            g.drawLine ({ a, e }, 1.2f + 1.2f * r.nextFloat());
         }
-        if (b.trail.size() > 1)
-        {
-            Path tr;
-            tr.startNewSubPath (b.trail.front());
-            for (size_t i = 1; i < b.trail.size(); ++i) tr.lineTo (b.trail[i]);
-            tr.lineTo (head);
-            for (int k = 0; k < 7; ++k)
-            {
-                const float off = ((float) k - 3.0f) * 4.0f;
-                g.setColour (rainbowColours[k].withAlpha (0.85f));
-                g.strokePath (tr, PathStrokeType (4.5f, PathStrokeType::curved, PathStrokeType::rounded), AffineTransform::translation (-dir.y * off, dir.x * off));
-            }
-        }
-        if (u > 0.55f)   // the sound barrier: a white cone forming round the nose
-        {
-            const float c = (u - 0.55f) / 0.45f;
-            const auto side = Point<float> (-dir.y, dir.x);
-            Path cone;
-            cone.startNewSubPath (head + dir * 14.0f);
-            cone.lineTo (head - dir * (50.0f + 60.0f * c) + side * (46.0f - 20.0f * c));
-            cone.lineTo (head - dir * (50.0f + 60.0f * c) - side * (46.0f - 20.0f * c));
-            cone.closeSubPath();
-            g.setColour (Colours::white.withAlpha (0.55f * c));
-            g.fillPath (cone);
-        }
-        if (! thrown)   // the flyer: a blue blur with a white glow (a flung balloon is its own)
-        {
-            g.setColour (Colours::white.withAlpha (0.5f));
-            g.fillEllipse (Rectangle<float> (26.0f, 26.0f).withCentre (head));
-            g.setColour (Colour (0xff6fc6ff));
-            g.fillEllipse (Rectangle<float> (15.0f, 15.0f).withCentre (head));
-        }
+        rbart::ribbon (g, pts, 14.0f + 16.0f * u, 1.0f, 0.0f, time);
+        rbart::comet (g, head, dir, u, time, ! thrown);
     }
 
-    // the boom
+    // the boom: the rainbow left along the path, the flash, the ring, the starburst and the stars
     const float t = (float) (now - b.boomTime);
     if (t >= 0.0f && t < b.tail + 2.0f)
     {
-        // the rainbow left in the sky along the streak's path, fading over the rainbow's length
         if (b.trail.size() > 1)
         {
-            const float a = 0.75f * (1.0f - fp::smoothstep (t / (b.tail + 1.0f)));
-            Path tr;
-            tr.startNewSubPath (b.trail.front());
-            for (size_t i = 1; i < b.trail.size(); ++i) tr.lineTo (b.trail[i]);
-            tr.lineTo (b.at);
-            auto dir = b.at - b.trail[b.trail.size() > 3 ? b.trail.size() - 3 : 0];
-            dir /= jmax (1.0f, dir.getDistanceFromOrigin());
-            const float wide = 5.0f + 5.0f * fp::smoothstep (t / 1.5f);
-            for (int k = 0; k < 7; ++k)
-            {
-                const float off = ((float) k - 3.0f) * wide;
-                g.setColour (rainbowColours[k].withAlpha (a));
-                g.strokePath (tr, PathStrokeType (wide + 0.8f, PathStrokeType::curved, PathStrokeType::butt), AffineTransform::translation (-dir.y * off, dir.x * off));
-            }
-            Random r (11);   // a few sparkles along it
-            for (int i = 0; i < 14; ++i)
-            {
-                const auto q = b.trail[(size_t) r.nextInt ((int) b.trail.size())] + Point<float> (r.nextFloat() * 30.0f - 15.0f, r.nextFloat() * 30.0f - 15.0f);
-                const float tw = 0.5f + 0.5f * std::sin ((float) now * 6.0f + (float) i * 1.7f);
-                Path st;
-                st.addStar (q, 4, 1.0f, 3.0f + 4.0f * tw);
-                g.setColour (Colours::white.withAlpha (a * tw));
-                g.fillPath (st);
-            }
+            auto pts = b.trail;
+            pts.push_back (b.at);
+            const float a = 1.0f - rbart::smooth01 ((t - b.tail * 0.6f) / (b.tail * 0.4f + 1.0f));
+            rbart::ribbon (g, pts, 30.0f + 8.0f * rbart::smooth01 (t / 1.0f), a, rbart::smooth01 ((t - 0.4f) / (b.tail + 0.6f)) * 0.9f, time);
+            rbart::trailSparkles (g, pts, a, time, ed.rbBoomsSeen);
         }
-        // the flash
-        if (t < 0.4f)
+        if (t < 0.35f)
         {
-            g.setColour (Colours::white.withAlpha (0.6f * std::exp (-t / 0.1f)));
+            g.setColour (Colours::white.withAlpha (0.5f * std::exp (-t / 0.08f)));
             g.fillAll();
         }
-        // the ring: seven bands, red outside, opening out fast and flat (seen from the side), with cloudy puffs on its rim
-        if (t < 2.2f)
+        if (t < 2.4f)
         {
-            const float R = 30.0f + 1150.0f * (1.0f - std::exp (-t / 0.55f));
-            const float alpha = 1.0f - fp::smoothstep (t / 2.2f);
-            const float aspect = 0.42f, bw = 7.0f + 10.0f * fp::smoothstep (t / 0.8f);
-            for (int k = 0; k < 7; ++k)
+            // flat and seen a little from above, opening out fast, red outside
+            const float R = 24.0f + 1150.0f * (1.0f - std::exp (-t / 0.55f));
+            const float bw = 9.0f + 12.0f * rbart::smooth01 (t / 0.8f);
+            const auto at = b.at;
+            rbart::donut (g, [=] (int k, float ang, float inset)
+                          {
+                              const float rr = jmax (1.0f, R - ((float) k + inset) * bw);
+                              return at + Point<float> (std::cos (ang) * rr, std::sin (ang) * rr * 0.42f);
+                          }, 1.0f - rbart::smooth01 (t / 2.4f), time);
+            for (int j = 1; j <= 3; ++j)   // the shock itself: white ripples inside the ring
             {
-                const float rr = jmax (2.0f, R - (float) k * bw);
-                g.setColour (rainbowColours[k].withAlpha (0.85f * alpha));
-                g.drawEllipse (Rectangle<float> (2.0f * rr, 2.0f * rr * aspect).withCentre (b.at), bw + 0.8f);
-            }
-            for (int i = 0; i < 30; ++i)   // the puffs
-            {
-                const float a = (float) i / 30.0f * MathConstants<float>::twoPi;
-                const auto q = b.at + Point<float> (std::cos (a) * (R + bw * 0.3f), std::sin (a) * (R + bw * 0.3f) * aspect);
-                const float pr = bw * (1.0f + 0.4f * std::sin ((float) i * 2.3f));
-                g.setColour (Colours::white.withAlpha (0.4f * alpha));
-                g.fillEllipse (Rectangle<float> (2.0f * pr, 1.6f * pr).withCentre (q));
-            }
-            // the shock itself: white ripples inside the ring
-            for (int j = 1; j <= 3; ++j)
-            {
-                const float rr = R * (0.25f * (float) j);
-                g.setColour (Colours::white.withAlpha (0.35f * alpha));
-                g.drawEllipse (Rectangle<float> (2.0f * rr, 2.0f * rr * aspect).withCentre (b.at), 1.6f);
+                const float rr = R * 0.22f * (float) j;
+                g.setColour (Colours::white.withAlpha (0.4f * (1.0f - rbart::smooth01 (t / 1.6f))));
+                g.drawEllipse (Rectangle<float> (2.0f * rr, 2.0f * rr * 0.42f).withCentre (at), 2.0f);
             }
         }
+        rbart::burst (g, b.at, t);
+        rbart::sparkles (g, b.at, t, ed.rbBoomsSeen);
     }
 }
 
