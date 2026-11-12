@@ -183,7 +183,7 @@ Slide the canister along its rail to choose where the frozen balloons go. To the
 
 ## Weather
 
-The weather switches run along the top of the window: the sun and cloud (cloudy), the rain cloud, the snowflake, the hot sun (heatwave) and auto weather. Click one to turn it on and again to turn it off. Rain and clouds together make a storm.
+The weather switches are one row along the top of the window, all the same size: cloudy, rain, snow, heatwave, fog, wind, hail, aurora, twister and auto weather. Click one to turn it on and again to turn it off. One that is on is lit up. Rain and clouds together make a storm.
 
 Rain eases a gentle lowpass onto the output and soaks the balloons.
 
@@ -199,7 +199,7 @@ Snow and a heatwave never come together: turning one on sends the other away.
 
 A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.
 
-With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there.
+With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the name under the auto switch shows what the sky is doing. You can still flip the switches yourself; auto carries on from there.
 
 ![Heatwave](../../docs/help/heat.jpg)
 
@@ -215,7 +215,7 @@ With auto weather on, the sky looks after itself. Every few minutes the weather 
 
 ## More weather
 
-Under the first row of weather switches is a second, smaller row: fog, wind, hail, aurora and twister.
+Fog, wind, hail, aurora and twister come after the heatwave in the weather row.
 
 Fog blurs every attack. The sound goes through six short echoes too close together to hear apart, so a hit loses its edge without growing a tail, and the highs sink. In the sphere the fog also hides where things are. The whole scene goes a little soft at the edges, and fog banks drift through the ball: a grain inside one comes from all round you instead of from one point, duller and with more of the room on it, until it flies out again.
 

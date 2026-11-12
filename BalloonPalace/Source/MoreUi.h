@@ -8,8 +8,10 @@
 //   GumballPage  the gumball menu: every balloon's control again as a gumball that stays put
 
 //==============================================================================
-// The newer weather. Its switches are a second, smaller row under the first; its pictures are drawn
-// over the room (the rainbow and the aurora behind the balloons, the rest in front of them).
+// The weather row: ten switches in one row along the top, all the same size, each a little picture
+// with its name under it, lit up while it's on (cloudy, rain, snow, heatwave, fog, wind, hail, aurora,
+// twister, auto). And the newer weather's pictures, drawn over the room (the rainbow and the aurora
+// behind the balloons, the rest in front of them).
 struct SkyArt
 {
     enum { fog = 0, wind, hail, aurora, twister, kButtons };
@@ -20,7 +22,10 @@ struct SkyArt
         int hailHits = 0;
     };
 
-    static juce::Rectangle<float> button (int i) noexcept { return { 296.0f + 104.0f * (float) i, 68.0f, 100.0f, 22.0f }; }
+    // the row's ten places, left to right
+    enum { slotCloudy = 0, slotRain, slotSnow, slotHeat, slotFog, slotWind, slotHail, slotAurora, slotTwister, slotAuto, kSlots };
+    static juce::Rectangle<float> slot (int i) noexcept { return { 296.0f + 52.0f * (float) i, 2.0f, 52.0f, 58.0f }; }
+    static juce::Rectangle<float> button (int i) noexcept { return slot (slotFog + i); }   // fog, wind, hail, aurora, twister
     static const char* name (int i) noexcept
     {
         static const char* const n[kButtons] = { "fog", "wind", "hail", "aurora", "twister" };
@@ -181,7 +186,151 @@ struct SkyArt
         }
     }
 
-    // one of the five small switches: a little picture and its name
+    // one place in the weather row: its picture, its name underneath, and a lit plate behind it while it's on
+    void drawSlot (juce::Graphics& g, int i, bool on, const juce::String& label) const
+    {
+        using namespace juce;
+        const auto r = slot (i);
+        const Point<float> c (r.getCentreX(), r.getY() + 22.0f);
+        const float a = on ? 1.0f : 0.72f, s = 30.0f;
+        if (on)
+        {
+            g.setColour (palette::dustyPink.withAlpha (0.22f));
+            g.fillRoundedRectangle (r.reduced (3.0f, 1.0f), 10.0f);
+            g.setColour (palette::dustyPink.withAlpha (0.8f));
+            g.drawRoundedRectangle (r.reduced (3.0f, 1.0f), 10.0f, 1.2f);
+        }
+        const auto white = Colour (0xfff3f4fa).withAlpha (a);
+        auto cloud = [&] (Point<float> at, float size, Colour col)
+        {
+            Path p;
+            p.addEllipse (Rectangle<float> (size * 0.6f, size * 0.6f).withCentre ({ at.x - size * 0.35f, at.y + size * 0.1f }));
+            p.addEllipse (Rectangle<float> (size * 0.8f, size * 0.8f).withCentre ({ at.x, at.y - size * 0.12f }));
+            p.addEllipse (Rectangle<float> (size * 0.56f, size * 0.56f).withCentre ({ at.x + size * 0.38f, at.y + size * 0.1f }));
+            p.addRectangle (at.x - size * 0.35f, at.y + size * 0.1f, size * 0.73f, size * 0.3f);
+            g.setColour (col);
+            g.fillPath (p);
+        };
+        auto sun = [&] (Point<float> at, float rad, Colour col, float turn)
+        {
+            g.setColour (col);
+            g.fillEllipse (Rectangle<float> (rad * 2.0f, rad * 2.0f).withCentre (at));
+            for (int k = 0; k < 8; ++k)
+            {
+                const float ang = (float) k * 0.7854f + turn;
+                g.drawLine (at.x + std::cos (ang) * rad * 1.4f, at.y + std::sin (ang) * rad * 1.4f, at.x + std::cos (ang) * rad * 1.85f, at.y + std::sin (ang) * rad * 1.85f, jmax (1.2f, rad * 0.22f));
+            }
+        };
+        auto line = [&] (const Path& p, Colour col, float th) { g.setColour (col); g.strokePath (p, PathStrokeType (th, PathStrokeType::curved, PathStrokeType::rounded)); };
+        const float move = on ? t : 0.0f;   // (the pictures only move while their weather is on)
+        switch (i)
+        {
+            case slotCloudy:
+                sun (c.translated (-s * 0.22f, -s * 0.2f), s * 0.2f, Colour (0xffffcf3a).withAlpha (a), move * 0.5f);
+                cloud (c.translated (s * 0.08f + (on ? 1.5f * std::sin (t * 0.8f) : 0.0f), s * 0.1f), s * 0.8f, Colour (0xffc9cfe4).withAlpha (a));
+                break;
+            case slotRain:
+                cloud (c.translated (0.0f, -s * 0.12f), s * 0.85f, Colour (0xffaab2cf).withAlpha (a));
+                for (int k = 0; k < 3; ++k)
+                {
+                    const float u = on ? (move * 1.6f + (float) k * 0.33f) - std::floor (move * 1.6f + (float) k * 0.33f) : 0.0f;
+                    const float x = c.x - s * 0.25f + (float) k * s * 0.25f, y = c.y + s * 0.3f + u * s * 0.16f;
+                    g.setColour (Colour (0xffbcd6ff).withAlpha (a * (on ? 1.0f - 0.6f * u : 1.0f)));
+                    g.drawLine (x, y, x - s * 0.06f, y + s * 0.2f, s * 0.07f);
+                }
+                break;
+            case slotSnow:
+                g.setColour (white);
+                for (int k = 0; k < 3; ++k)
+                {
+                    const float ang = (float) k * 1.0472f + move * 0.4f;
+                    g.drawLine (c.x - std::cos (ang) * s * 0.42f, c.y - std::sin (ang) * s * 0.42f, c.x + std::cos (ang) * s * 0.42f, c.y + std::sin (ang) * s * 0.42f, s * 0.08f);
+                }
+                break;
+            case slotHeat:
+                sun (c.translated (0.0f, -s * 0.12f), s * 0.2f, Colour (0xffffb02e).withAlpha (a), move * 0.6f);
+                for (int k = 0; k < 2; ++k)
+                {
+                    Path p;
+                    for (int j = 0; j <= 8; ++j)
+                    {
+                        const Point<float> q (c.x - s * 0.35f + (float) j * s * 0.0875f, c.y + s * 0.32f + (float) k * s * 0.14f + std::sin ((float) j * 1.5f + move * 4.0f) * s * 0.04f);
+                        if (j == 0) p.startNewSubPath (q); else p.lineTo (q);
+                    }
+                    line (p, Colour (0xffffb02e).withAlpha (a), s * 0.06f);
+                }
+                break;
+            case slotFog:
+            {
+                const float rows[3][3] = { { -0.4f, 0.4f, -0.22f }, { -0.28f, 0.44f, 0.0f }, { -0.4f, 0.2f, 0.22f } };
+                g.setColour (white);
+                for (int k = 0; k < 3; ++k)
+                {
+                    const float dx = on ? 2.0f * std::sin (t * 1.3f + (float) k * 2.0f) : 0.0f;
+                    g.drawLine (c.x + rows[k][0] * s + dx, c.y + rows[k][2] * s, c.x + rows[k][1] * s + dx, c.y + rows[k][2] * s, s * 0.1f);
+                }
+                break;
+            }
+            case slotWind:
+                for (int k = 0; k < 2; ++k)
+                {
+                    const float dx = on ? 2.5f * std::sin (t * 4.0f + (float) k * 1.5f) : 0.0f;
+                    const float y = c.y - s * 0.12f + (float) k * s * 0.26f, cy = y + (k == 0 ? -s * 0.13f : s * 0.13f);
+                    Path p;
+                    p.startNewSubPath (c.x - s * 0.42f + dx, y);
+                    p.lineTo (c.x + s * 0.18f + dx, y);
+                    // (curling back on itself: up for the top one, down for the bottom one)
+                    p.addCentredArc (c.x + s * 0.18f + dx, cy, s * 0.13f, s * 0.13f, 0.0f, k == 0 ? MathConstants<float>::pi : 0.0f, k == 0 ? -MathConstants<float>::pi * 0.35f : MathConstants<float>::pi * 1.35f, false);
+                    line (p, white, s * 0.08f);
+                }
+                break;
+            case slotHail:
+                cloud (c.translated (0.0f, -s * 0.15f), s * 0.8f, Colour (0xffaab2cf).withAlpha (a));
+                g.setColour (white);
+                for (int k = 0; k < 3; ++k)
+                {
+                    const float bounce = on ? std::abs (std::sin (t * 5.0f + (float) k * 1.1f)) * s * 0.12f : 0.0f;
+                    g.fillEllipse (Rectangle<float> (s * 0.14f, s * 0.14f).withCentre ({ c.x - s * 0.24f + (float) k * s * 0.24f, c.y + s * 0.42f + (float) (k % 2) * s * 0.06f - bounce }));
+                }
+                break;
+            case slotAurora:
+            {
+                static const uint32 cols[3] = { 0xff4cffa0, 0xff59e0ff, 0xffa77bff };
+                for (int k = 0; k < 3; ++k)
+                {
+                    Path p;
+                    const float x = c.x - s * 0.26f + (float) k * s * 0.26f, sway = on ? 2.0f * std::sin (t * 1.5f + (float) k) : 0.0f;
+                    p.startNewSubPath (x + sway, c.y - s * 0.38f);
+                    p.quadraticTo (x + s * 0.16f - sway, c.y, x + sway, c.y + s * 0.38f);
+                    line (p, Colour (cols[k]).withAlpha (a), s * 0.12f);
+                }
+                break;
+            }
+            case slotTwister:
+                g.setColour (white);
+                for (int k = 0; k < 4; ++k)
+                {
+                    const float half = s * (0.42f - 0.1f * (float) k);
+                    const float dx = on ? 2.0f * std::sin (t * 9.0f + (float) k * 1.3f) : (float) (k % 2) * s * 0.05f;
+                    g.fillRoundedRectangle (c.x - half + dx, c.y - s * 0.36f + (float) k * s * 0.22f, half * 2.0f, s * 0.11f, s * 0.05f);
+                }
+                break;
+            default:   // auto: a little switch
+            {
+                const auto track = Rectangle<float> (s * 0.84f, s * 0.4f).withCentre (c);
+                g.setColour (on ? palette::dustyPink : Colour (0xff59627c));
+                g.fillRoundedRectangle (track, s * 0.2f);
+                g.setColour (Colours::white);
+                g.fillEllipse (Rectangle<float> (s * 0.3f, s * 0.3f).withCentre ({ c.x + (on ? s * 0.2f : -s * 0.2f), c.y }));
+                break;
+            }
+        }
+        g.setFont (SadLookAndFeel::uiFont (8.8f, true));
+        g.setColour (palette::blush.withAlpha (on ? 1.0f : 0.72f));
+        g.drawFittedText (label, r.withTop (r.getY() + 41.0f).withHeight (13.0f).toNearestInt(), Justification::centred, 1, 0.75f);
+    }
+
+    // (the first version's small switch with its name beside it; kept for anything that still wants one)
     void drawButton (juce::Graphics& g, int i, bool on) const
     {
         using namespace juce;

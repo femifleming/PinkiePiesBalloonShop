@@ -35,6 +35,7 @@ struct FreakieTestAccess
     }
     static void openGumballs (FreakiePieEditor& e) { e.openGumballs(); }
     static void weather (FreakiePieEditor& e, int which) { e.weatherBar->toggle (which); }
+    static int weatherAt (FreakiePieEditor& e, juce::Point<float> p) { return e.weatherBar->buttonAt (p); }
     static bool skyOn (FreakiePieEditor& e, int i) { return e.skyValue[i] > 0.5f; }
     static juce::Rectangle<float> gumballButton (FreakiePieEditor& e) { return e.gumballButton; }
     // run the bouquet's physics for a while, as the 60 Hz timer would
@@ -2743,7 +2744,7 @@ int main (int argc, char** argv)
     }
 
 
-    // the second weather row and the gumball menu
+    // the weather row and the gumball menu
     {
         FreakiePieProcessor p;
         p.setRateAndBufferSizeDetails (48000.0, 256);
@@ -2758,9 +2759,23 @@ int main (int argc, char** argv)
         FreakieTestAccess::weather (*ed, 7); FreakieTestAccess::weather (*ed, 8);
         const bool hailAndAurora = p.apvts.getRawParameterValue (ids::hail)->load() > 0.5f && p.apvts.getRawParameterValue (ids::aurora)->load() > 0.5f;
         FreakieTestAccess::weather (*ed, 7); FreakieTestAccess::weather (*ed, 8);
-        std::printf ("second weather row: fog on %d, wind on %d and the fog gone %d, hail and aurora on %d\n", (int) fogOn, (int) windOn, (int) fogGone, (int) hailAndAurora);
+        std::printf ("weather row: fog on %d, wind on %d and the fog gone %d, hail and aurora on %d\n", (int) fogOn, (int) windOn, (int) fogGone, (int) hailAndAurora);
         if (! (fogOn && windOn && fogGone && hailAndAurora)) FAIL_HERE();
 
+        {
+            // one row of ten, all the same size, side by side: each place answers for its own switch
+            static const int which[SkyArt::kSlots] = { 0, 1, 2, 3, 5, 6, 7, 8, 9, 4 };
+            bool right = true, sameSize = true, inRow = true;
+            for (int i = 0; i < SkyArt::kSlots; ++i)
+            {
+                const auto r = SkyArt::slot (i);
+                right = right && FreakieTestAccess::weatherAt (*ed, r.getCentre()) == which[i];
+                sameSize = sameSize && r.getWidth() == SkyArt::slot (0).getWidth() && r.getHeight() == SkyArt::slot (0).getHeight() && r.getY() == SkyArt::slot (0).getY();
+                inRow = inRow && r.getX() >= WeatherBar::X && r.getRight() <= WeatherBar::X + WeatherBar::W && (i == 0 || r.getX() == SkyArt::slot (i - 1).getRight());
+            }
+            std::printf ("weather row: ten places, each its own switch %d, all one size %d, side by side inside the bar %d\n", (int) right, (int) sameSize, (int) inRow);
+            if (! (right && sameSize && inRow)) FAIL_HERE();
+        }
         auto* gp = FreakieTestAccess::gumballs (*ed);
         FreakieTestAccess::openGumballs (*ed);
         FreakieTestAccess::run (*ed, 0.6f);

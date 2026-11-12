@@ -2111,16 +2111,16 @@ namespace
           "Slide the canister along its rail to choose where the frozen balloons go. To the right they come straight out. "
           "To the left they go back through the effects, so the pitch shifter and the reverb play with them too." },
         { "Weather",
-          "The weather switches run along the top of the window: the sun and cloud (cloudy), the rain cloud, the snowflake, the hot sun (heatwave) and auto weather. Click one to turn it on and again to turn it off. Rain and clouds together make a storm.\n\n"
+          "The weather switches are one row along the top of the window, all the same size: cloudy, rain, snow, heatwave, fog, wind, hail, aurora, twister and auto weather. Click one to turn it on and again to turn it off. One that is on is lit up. Rain and clouds together make a storm.\n\n"
           "Rain eases a gentle lowpass onto the output and soaks the balloons.\n\n"
           "When it's cloudy, clouds drift through the bouquet, and any balloon inside one slowly wanders to new values, with a little tag showing where it has got to. Clouds bring thunder too, which pulls the rain's lowpass down in slow rolls.\n\n"
           "In a storm, lightning strikes now and then and drops a random effect from the store into the room for a minute or so. If you like it, tick it in the store and it stays.\n\n"
           "Snow freezes everything over the fade-in time: the sound slows until it stops completely and holds, and the balloons ice over and hang still. It stays frozen until you click the snowflake again, then thaws over the fade-out time. Right-click the snowflake to set both times, anywhere from 5 seconds to 5 minutes: drag along a bar or scroll on it, and double-click puts it back to 5 seconds. Leave Pinkie out in the snow for a minute and she catches a cold; she perks up once the snow has gone.\n\n"
           "Snow and a heatwave never come together: turning one on sends the other away.\n\n"
           "A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.\n\n"
-          "With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there." },
+          "With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the name under the auto switch shows what the sky is doing. You can still flip the switches yourself; auto carries on from there." },
         { "More weather",
-          "Under the first row of weather switches is a second, smaller row: fog, wind, hail, aurora and twister.\n\n"
+          "Fog, wind, hail, aurora and twister come after the heatwave in the weather row.\n\n"
           "Fog blurs every attack. The sound goes through six short echoes too close together to hear apart, so a hit loses its edge without growing a tail, and the highs sink. A pale haze drifts through the shop.\n\n"
           "Wind comes in gusts. The sound is read through a delay that keeps drifting, so its pitch wavers a few cents sharp and flat, up to about a fifth of a semitone in a strong gust. Each gust swells the sound a little and leans it to one side, and the balloons lean over with it. The wind blows the fog away: turning one on sends the other off.\n\n"
           "Hail throws hailstones. Each one is a tiny slice of the last moment of your sound, hit hard and then bouncing, quicker and quieter, like a ball dropped on a table. Every stone lands somewhere else between left and right.\n\n"
@@ -4970,6 +4970,12 @@ void StoreShelves::paint (Graphics& g)
 // the weather row
 WeatherBar::WeatherBar (FreakiePieEditor& e) : ed (e)
 {
+    // one row, all the same size: cloudy, rain, snow, heatwave, fog, wind, hail, aurora, twister, auto
+    ed.cloudyButton = SkyArt::slot (SkyArt::slotCloudy);
+    ed.cloudButton  = SkyArt::slot (SkyArt::slotRain);
+    ed.snowButton   = SkyArt::slot (SkyArt::slotSnow);
+    ed.heatButton   = SkyArt::slot (SkyArt::slotHeat);
+    ed.autoButton   = SkyArt::slot (SkyArt::slotAuto);
     setBounds ((int) X, (int) Y, (int) W, (int) H);
     setInterceptsMouseClicks (true, false);
 }
@@ -5049,13 +5055,21 @@ void WeatherBar::step (float) { repaint(); }   // the sun turns, the rain falls,
 void WeatherBar::paint (Graphics& g)
 {
     g.addTransform (AffineTransform::translation (-X, -Y));   // the switches are placed in the room's coordinates
-    ed.drawCloudyButton (g);
-    ed.drawRainButton (g);
-    ed.drawSnowButton (g);
-    ed.drawHeatButton (g);
-    ed.drawAutoSwitch (g);
-    if (ed.skyArt != nullptr)
-        for (int i = 0; i < SkyArt::kButtons; ++i) ed.skyArt->drawButton (g, i, isOn (5 + i));
+    if (ed.skyArt == nullptr) return;
+    // which switch (see toggle) sits in each place of the row
+    static const int which[SkyArt::kSlots] = { 0, 1, 2, 3, 5, 6, 7, 8, 9, 4 };
+    static const char* const names[SkyArt::kSlots] = { "cloudy", "rain", "snow", "heatwave", "fog", "wind", "hail", "aurora", "twister", "auto" };
+    static const char* const spells[fp::AutoWeather::numSpells] = { "clear", "cloudy", "rain", "storm", "snow", "heatwave", "fog", "wind", "hail", "aurora" };
+    for (int i = 0; i < SkyArt::kSlots; ++i)
+    {
+        const bool on = isOn (which[i]);
+        String label (names[i]);
+        if (i == SkyArt::slotSnow && on && ed.frozen >= 1.0f) label = "frozen";
+        if (i == SkyArt::slotAuto && on)   // (auto: what the sky is doing now)
+            label = spells[(int) fp::AutoWeather::spellOf ({ ed.rainOn(), ed.cloudyOn(), ed.snowOn(), ed.heatOn(), ed.skyValue[0] > 0.5f, ed.skyValue[1] > 0.5f,
+                                                             ed.skyValue[2] > 0.5f, ed.skyValue[3] > 0.5f })];
+        ed.skyArt->drawSlot (g, i, on, label);
+    }
 }
 
 //==============================================================================

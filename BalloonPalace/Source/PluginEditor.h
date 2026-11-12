@@ -181,7 +181,7 @@ public:
     void mouseDown (const juce::MouseEvent&) override;   // right-click the snow or the heat for their fade times
     void step (float dt);
     void toggle (int which);   // (the snow and the heatwave never fall together: one turns the other off)   // 0 cloudy, 1 rain, 2 snow, 3 heat, 4 auto
-                               // the second row: 5 fog, 6 wind (each sends the other away), 7 hail, 8 aurora, 9 twister (starts one)
+                               // then: 5 fog, 6 wind (each sends the other away), 7 hail, 8 aurora, 9 twister (starts one)
     static constexpr float X = 290.0f, Y = 0.0f, W = 540.0f, H = 90.0f;
     int buttonAt (juce::Point<float> contentPoint) const noexcept;
 private:
@@ -960,7 +960,7 @@ private:
     void drawHeatButton (juce::Graphics&) const;
     void drawHeatShimmer (juce::Graphics&, juce::Rectangle<float> full) const;
 
-    // the newer weather (fog, wind, hail, aurora, and the twister's button): a second row of small switches,
+    // the newer weather (fog, wind, hail, aurora, and the twister's button): in the same row as the rest,
     // and their pictures (see MoreUi.h)
     float skyValue[4] {};
     std::unique_ptr<juce::ParameterAttachment> skyAtt[4];
