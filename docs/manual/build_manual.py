@@ -19,13 +19,13 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 SHOP = dict(
-    key="shop", name="Pinkie Pie's Balloon Shop", short="the Balloon Shop", version="1.1.1",
+    key="shop", name="Pinkie Pie's Balloon Shop", short="the Balloon Shop", version="1.2.0",
     icon=os.path.join(REPO, "Resources/icon/icon_1024.png"),
     tagline="A multi-effect you play as balloons.",
     accent="#ff4f9a", accent2="#ffc4e1",
 )
 PALACE = dict(
-    key="palace", name="Pinkie Pie's Balloon Palace", short="the Balloon Palace", version="0.2.1",
+    key="palace", name="Pinkie Pie's Balloon Palace", short="the Balloon Palace", version="0.3.0",
     icon=os.path.join(REPO, "BalloonPalace/Resources/icon/icon_1024.png"),
     tagline="The Balloon Shop inside a glass sphere: an Ambisonics encoder, 1st to 7th order.",
     accent="#8a6bff", accent2="#d9ccff",
@@ -95,6 +95,13 @@ FIGS_COMMON = {
                 ("heat", "A heatwave."),
                 ("heat_fades", "Right-click the snow or the heat for its fade times."),
                 ("wet", "Rain in the heat: Pinkie soaked through.")],
+    "More weather": [("sky_fog", "Fog."),
+                     ("sky_wind", "Wind: streaks of air, and the balloons leaning over."),
+                     ("sky_twister", "A twister."),
+                     ("sky_hail", "Hail in a storm."),
+                     ("sky_rainbow", "A rainbow after the rain, and the aurora across the top of the sky.")],
+    "The gumball menu": [("menu_gumballs", "The gumball menu: a row for each effect."),
+                         ("menu_bought", "With the gumball machine and a store effect bought: their rows have popped in.")],
     "Sonic rainboom": [("rainboom_dive", "The dive: Rainbow Dash speeding in, the rainbow streaming out behind her."),
                        ("rainboom_boom", "The boom: the starburst and the ring of seven colours. Pinkie jumps, amazed."),
                        ("rainboom_ring", "The ring opening out; the shockwave has knocked the balloons back."),
@@ -114,7 +121,12 @@ FIGS = {
         "Grains in the sphere": [("sphere_scatter_orbit", "Scatter: one copy of the effects, its granulator grains flying to every grain."),
                                  ("sphere_six_lorenz", "Six grains flying the Lorenz attractor.")],
         "Flying": [("sphere_flying_in", "A balloon flying into the sphere after it was let go."),
-                   ("sphere_weather_flock", "A flock, with weather drifting through the glass.")],
+                   ("sphere_weather_flock", "A flock, with weather drifting through the glass."),
+                   ("flight_soundcube", "Soundcube, after Bernhard Leitner: the grains step from loudspeaker to loudspeaker round the walls of a cube."),
+                   ("flight_pendulum", "Pendulum, after Leitner: each grain swings through underneath you."),
+                   ("flight_sonotron", "Sonotron, after Iannis Xenakis: one ring, turning faster and faster as it widens."),
+                   ("flight_nomos", "Nomos, after Xenakis: the grains on the corners of a turning cube."),
+                   ("flight_paraboloid", "Paraboloid, after Xenakis: straight glides that together draw a saddle.")],
         "Out": [("sphere_one_grain", "One grain: the energy map on the glass and at the top left shows where it is.")],
     }),
 }
@@ -142,7 +154,7 @@ def groups(cfg, params):
     g.append(("The gumball machine (orange)", "Bought at the balloon store.", take(["stOwned", "stAmount", "stBounce", "stSway", "stCutup"])))
     g.append(("Sound balloons, pops and the canister", "",
               take(["catchFrom", "grainsLevel", "grainsThru", "balloonSfx", "popsThru"])))
-    g.append(("Weather", "", take(["cloudy", "rain", "snow", "heat", "helium", "autoWeather", "snowIn", "snowOut", "heatIn", "heatOut"])))
+    g.append(("Weather", "", take(["cloudy", "rain", "snow", "heat", "helium", "autoWeather", "snowIn", "snowOut", "heatIn", "heatOut", "fog", "wind", "hail", "aurora", "twister"])))
     g.append(("Sonic rainboom", "", take(["rbBoom", "rbLevel", "rbTail", "rbThrows", "rbHits", "rbStorms", "rbFast"])))
     g.append(("Bypass", "", take(["fxBypass"])))
     # the store's effects, one table each
@@ -177,9 +189,11 @@ def param_rows(ps):
 # the window map: numbered spots on a screenshot (design coordinates, 1060 x 600)
 MAP_COMMON = [
     ((560, 30), "The weather row: cloudy, rain, snow, heatwave and auto weather. Right-click the snow or the heat for their fade times."),
+    ((560, 79), "The second weather row: fog, wind, hail, aurora and twister."),
     ((880, 27), "The balloon store."),
     ((1003, 37), "Pop sounds, help (the library) and reset."),
     ((998, 110), "The sonic rainboom: click for one, right-click for what sets it off."),
+    ((1003, 157), "Gumballs: the gumball menu, every control again as a gumball that stays put."),
     ((90, 520), "The pink pump: blows up plucked notes."),
     ((1000, 520), "The teal pump: catches sounds into frozen balloons. Next to it, the next note's pitch."),
     ((468, 545), "The helium tank and the canister rail along the bottom."),
@@ -268,7 +282,7 @@ def flow_section(cfg):
             ("Pops and hiss", "Straight out, or into the effects if you choose."),
             ("Frozen balloons", "The sounds you caught, played as grains. The canister sends them straight out or back round through the effects."),
             ("Sonic rainboom", "Added on top when one happens, made from what the effects are playing."),
-            ("Weather", "Rain (a lowpass that eases in), helium (a highpass), clouds and thunder, then the heatwave and the snow."),
+            ("Weather", "A twister, the wind and the fog change the sound first. Then rain (a lowpass that eases in), helium (a highpass), clouds and thunder. Hailstones, the rainbow and the aurora are added on top, made from what is playing. Last come the heatwave and the snow, which can still freeze all of it."),
             ("Chalkboard EQ", "The curve you drew."),
             ("Leveler and limiter", "A gentle leveler, then a look-ahead limiter at -1 dBFS, so it never clips. The look-ahead is 1.5 ms, and the plug-in reports it to your DAW."),
             ("Out", "Stereo (mono tracks get the two sides mixed)."),
@@ -281,9 +295,10 @@ def flow_section(cfg):
             ("The granulator", "A cloud of short grains, each born at its own direction round one of the grains."),
             ("Pops and frozen balloons", "From the loudspeaker's place."),
             ("Sonic rainboom", "The dive and the boom as points, the rainbow as seven rings round where it broke."),
+            ("Hail, rainbow, aurora", "Made from everything the sphere is playing: hailstones as points bouncing down from overhead, the rainbow as seven arcs across one side of the sky, the aurora as four curtains high round you."),
             ("Sphere reverb", "One 64-line FDN for the whole sphere, run on every channel. Grains further out send more into it."),
             ("Energy map", "Measured here (from the first 16 channels, whatever the order), for the glass and the map at the top left."),
-            ("Master", "Weather, heat, snow and the chalkboard EQ on every channel, then the leveler and the limiter (-1 dBFS), linked across the channels."),
+            ("Master", "A twister, the wind and the fog on every channel alike (so nothing moves from where it is), then weather, heat, snow and the chalkboard EQ on every channel, then the leveler and the limiter (-1 dBFS), linked across the channels."),
             ("Out", "Ambisonics at the order you picked (ACN, SN3D: 16 channels at 3rd order, up to 64 at 7th), to a decoder."),
         ]
     boxes = "".join("<div class='step'><b>%s</b><span>%s</span></div>" % (esc(a), esc(b)) for a, b in steps)
@@ -303,6 +318,8 @@ def gestures_section(cfg):
         ("Right-click pop sounds", "Pops on or off, or into the effects."),
         ("Click the rainboom cloud", "A rainboom now. Right-click: what sets them off, level and the rainbow's length."),
         ("Fling a balloon hard", "Breaks the sound barrier: a rainboom where it's got to (when on throws is ticked)."),
+        ("Click gumballs (top right)", "The gumball menu: every control as a gumball that stays put. Drag or scroll one to turn it, click a switch, double-click to reset. Escape closes it."),
+        ("Click twister", "A whirlwind now, for 10 to 20 seconds."),
         ("Cursor to the top left corner", "The card: presets, scale and bypass."),
         ("Cursor to the left edge", "The order list. Drag an effect up or down, or roll the die."),
     ]
@@ -326,6 +343,8 @@ def trouble_section(cfg):
          f"The builds aren't notarised. Run the <code>xattr</code> line from Installing, then rescan. To check the Audio Unit yourself: <code>auval -v aufx {code} Frkp</code>."),
         ("The sound changes on its own",
          "Something in the weather is doing it. Clouds make the balloons inside them wander (and in the Balloon Palace the tokens too), auto weather changes the sky every few minutes, a storm's lightning lends a store effect for a while, and Trixie drops by now and then. Turn off cloudy and auto weather for a steady patch."),
+        ("A rainbow or a twister came by itself",
+         "A rainbow follows any shower of 20 seconds or more that ends under a clear sky. A twister comes every few minutes while wind and cloudy are both on. Turn off the wind, or keep the clouds while the rain stops, to go without."),
         ("Everything has stopped or gone still", "It's snowing: snow freezes the sound until you click the snowflake again. Also check the bypass on the card."),
         ("A rainboom went off by itself",
          "Right-click the rainboom cloud: on hits, after storms" + (", on fast grains" if cfg["key"] == "palace" else "") + " and on throws each set one off. Untick the ones you don't want."),
@@ -344,7 +363,7 @@ def trouble_section(cfg):
 def credits_section(cfg):
     extra = ""
     if cfg["key"] == "palace":
-        extra = "<p>The ambisonic conventions follow the IEM Plug-in Suite and SPARTA; the energy map follows the IEM EnergyVisualizer; the distance model follows the IEM RoomEncoder and the reverb the IEM FdnReverb. The source-spread and distance ideas were checked against s3g-dsp. No code from these is included.</p>"
+        extra = "<p>The ambisonic conventions follow the IEM Plug-in Suite and SPARTA; the energy map follows the IEM EnergyVisualizer; the distance model follows the IEM RoomEncoder and the reverb the IEM FdnReverb. The source-spread and distance ideas were checked against s3g-dsp. No code from these is included.</p><p>Four flight modes follow the sound-space work of Bernhard Leitner (lines and swinging spaces of sound, vertical spaces, the Soundcube of 1969). Five follow Iannis Xenakis: Terretektorh and Persephassa, the Philips Pavilion and Metastaseis, Pithoprakta, Nomos Alpha and Analogique A, as he describes them in <i>Formalized Music</i>. They are tributes to those ideas, not reconstructions of the works.</p>"
     return f"""<h2 id='credits'>Credits and license</h2>
 <p>This is an unofficial fan project, not affiliated with or endorsed by Hasbro. My Little Pony and its characters are trademarks of Hasbro. The character pictures and backgrounds are fan-made, as is the "Magic is Friendship" title font, and they belong to their creators. The flying Rainbow Dash is by Nightmare Moon.</p>
 <p>The balloon-store effects are rebuilt from Olivier Bélanger's SoundGrain (the phaser replaces its flanger). The gumball machine, the ring mod and the bouncing plucks take their ideas from Alexander Mesker's thesis <i>Analysis and recreation of key features in selected Autechre tracks from 1998-2005</i> (Macquarie University, 2007).</p>
@@ -366,7 +385,22 @@ def palace_extra_sections():
         ("fall", "From the top of the sphere to the bottom, over and over."),
         ("ping-pong", "Straight across the sphere, from one side to the other."),
     ]
-    rows = "".join("<tr><td><b>%s</b></td><td>%s</td></tr>" % (a, esc(b)) for a, b in flights)
+    leitner = [
+        ("line", "A line of sound through the room and through you: each grain runs along its own straight line from wall to wall and back, at an even pace."),
+        ("pendulum", "A swinging space: each grain hangs from a point overhead and swings through underneath you, slow at the ends and quick in the middle."),
+        ("column", "A vertical space: each grain climbs and sinks along its own column standing round you, winding a little round it."),
+        ("soundcube", "A cube with nine loudspeakers on each wall. The grains don't fly: they step from one loudspeaker to the next, drawing a ring round you, then another higher or lower. Every third grain draws its rings round a different axis."),
+    ]
+    xenakis = [
+        ("sonotron", "All the grains on one ring that turns faster and faster along a logarithmic spiral as it widens, then starts again the other way (Terretektorh, the end of Persephassa)."),
+        ("paraboloid", "Every grain glides along its own straight line; the lines are the two families of rulings of a hyperbolic paraboloid, z = xy (the Philips Pavilion, the glissandi of Metastaseis)."),
+        ("gas", "The grains are the molecules of a gas: each flies straight, its speed drawn from the Maxwell-Boltzmann distribution, and leaves the glass at a new speed when it hits it (Pithoprakta). Speed is the temperature."),
+        ("nomos", "The grains sit on the eight corners of a cube (a second eight on a smaller cube inside). The cube turns from one of its 24 rotations to the next, each the product of the two before it (Nomos Alpha)."),
+        ("screens", "The sphere is cut into eight cells. Every moment each grain moves on by a Markov chain, one two-state chain per axis, with the transition tables of Analogique A (0.2 / 0.8 and 0.85 / 0.4); which table an axis uses depends on where the grain is on the other two."),
+    ]
+    def table(items): return "".join("<tr><td><b>%s</b></td><td>%s</td></tr>" % (a, esc(b)) for a, b in items)
+    rows = table(flights)
+    rows_leitner, rows_xenakis = table(leitner), table(xenakis)
     return f"""
 <h2 id="ambisonics">Spatial audio: what comes out, and where it goes</h2>
 <p>The Balloon Palace is an encoder. It never plays straight to loudspeakers or headphones: it puts out a sound field, and a decoder after it turns that into speaker feeds or binaural headphones. That's what lets the same session play on any speaker layout.</p>
@@ -394,6 +428,13 @@ def palace_extra_sections():
 <h2 id="flight">The flight modes</h2>
 <p>Pick one with the flight token; speed sets how fast (0.05x to 3x).</p>
 <table class="plain">{rows}</table>
+<h3>After Bernhard Leitner</h3>
+<p>Since 1968 Leitner has built rooms out of sound moving along lines of loudspeakers: sound as a building material, drawn through a space and through the body. These four flights take up his figures.</p>
+<table class="plain">{rows_leitner}</table>
+<h3>After Iannis Xenakis</h3>
+<p>Xenakis moved sound through space with the same mathematics he composed with. These five flights each take one of his procedures and apply it to where the grains are.</p>
+<table class="plain">{rows_xenakis}</table>
+<p>The wind pushes the grains of any flight the same way while it blows, and a twister takes them all up into its spiral until it is over.</p>
 
 <h2 id="distance">Distance and Doppler</h2>
 <p>The distance token is the size of the bubble you're in: its radius, from 1 metre to 50. Every sound is a point with its own distance from you, and distance sounds the way it does in a room, after the IEM RoomEncoder:</p>
@@ -496,10 +537,10 @@ def build(cfg, dump, shots_dir, out_pdf):
     # about
     if cfg["key"] == "shop":
         about = """<p>The Balloon Shop is a multi-effect you play as balloons. Every balloon is a control, and how full it is shows its value. Your sound goes through a chain of effects in an order you set, the weather changes it, pumps blow up plucked notes or catch sounds into frozen balloons, and a little cloud sets off a sonic rainboom.</p>
-<p>This manual covers version 1.1.1. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, a map of the window and how the sound flows. After it there's a quick reference for gestures, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>"""
+<p>This manual covers version 1.2.0. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, a map of the window and how the sound flows. After it there's a quick reference for gestures, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>"""
     else:
         about = """<p>Pinkie Pie's Balloon Palace is the Balloon Shop inside a glass sphere: an Ambisonics encoder, from 1st to 7th order (3rd by default). Stereo comes in; a sound field comes out (16 channels at 3rd order, 36 at 5th, 64 at 7th), for a decoder to play on loudspeakers or headphones. Little bouquets of balloons fly round inside the sphere, each carrying its own copy of the effects, and every sound is a single point you can hear and find, with its distance, its Doppler shift and one reverb for the whole sphere.</p>
-<p>This manual covers version 0.2.1. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, how to route it to a decoder, a map of the window and how the sound flows. After it there are the flight modes, distance and Doppler, a gesture reference, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>
+<p>This manual covers version 0.3.0. Its middle part, the guide, is the same text you'll find in the plug-in's library: click <b>help</b> in the top right corner. Before it come the installation steps, how to route it to a decoder, a map of the window and how the sound flows. After it there are the flight modes, distance and Doppler, a gesture reference, every parameter your DAW can automate, the store's effects, the presets and answers to common problems.</p>
 <p>Everything in the Balloon Shop is here too, so the shop's own manual also applies.</p>"""
     parts.append("<h2 id='about'>About this manual</h2>" + about)
     parts.append(install_section(cfg))

@@ -30,6 +30,9 @@ public:
     bool doppler = true;
     static inline bool withWalls = true;   // (a test turns the walls off to check the direct path alone)
     int order = ambi::kOrder;              // the Ambisonic order it encodes to (the processor sets it)
+    // in a fog bank (0..1): the direct sound loses its higher orders (so it comes from a wide patch of the sphere, not
+    // a point) and more of its highs
+    float blur = 0.0f;
     static constexpr float refMetres = 4.0f;   // at 4 m a sound is at unity; nearer louder (up to +12 dB), further quieter (1 / distance)
 
     void prepare (double sampleRate, int maxBlock)
@@ -65,9 +68,16 @@ public:
             const float d = std::max (k == 0 ? 0.3f : 0.5f, img[k].length());
             const float delay = d / 343.0f * (float) sr;
             const float gain = std::min (4.0f, ref / d) * (k == 0 ? 1.0f : 0.35f);   // each wall -9 dB: enough to say how far, not enough to blur where
-            const float air = 20000.0f / (1.0f + d / 25.0f) * (k == 0 ? 1.0f : 0.55f);
+            const float air = 20000.0f / (1.0f + d / 25.0f) * (k == 0 ? 1.0f - 0.65f * blur : 0.55f);
             const float a = 1.0f - std::exp (-(float) kTwoPi * std::min (air, (float) sr * 0.45f) / (float) sr);
             ambi::Coefs c = k == 0 ? ambi::encodeNear (posTo, order) : ambi::sh (img[k].normalised(), order);
+            if (k == 0 && blur > 0.0f)
+            {
+                const float per = 1.0f - 0.8f * std::min (1.0f, blur);
+                float wl = 1.0f;
+                for (int l = 0; l <= order; ++l, wl *= per)
+                    for (int ch = l * l; ch < ambi::chFor (l); ++ch) c[(size_t) ch] *= wl;
+            }
             if (fresh) { t.delay = delay; t.gain = gain; t.coef = c; t.a = a; }
             float delayTo = delay;
             if (! doppler) delayTo = std::clamp (delay, t.delay - 0.0015f * (float) n, t.delay + 0.0015f * (float) n);

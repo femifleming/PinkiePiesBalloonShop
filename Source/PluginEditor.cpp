@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "MoreUi.h"
 #include "RainboomArt.h"
 #include <BinaryData.h>
 
@@ -740,6 +741,16 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
         heatAtt = std::make_unique<ParameterAttachment> (*h, [this] (float v) { heatValue = v; });
         heatAtt->sendInitialUpdate();
     }
+    {
+        const char* skyIds[4] = { ids::fog, ids::wind, ids::hail, ids::aurora };
+        for (int i = 0; i < 4; ++i)
+            if (auto* prm = p.apvts.getParameter (skyIds[i]))
+            {
+                skyAtt[i] = std::make_unique<ParameterAttachment> (*prm, [this, i] (float v) { skyValue[i] = v; });
+                skyAtt[i]->sendInitialUpdate();
+            }
+        skyArt = std::make_unique<SkyArt>();
+    }
     if (auto* aw = p.apvts.getParameter (ids::autoWeather))
     {
         autoAtt = std::make_unique<ParameterAttachment> (*aw, [this] (float v) { autoValue = v; });
@@ -811,6 +822,40 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
     library->twilight = ImageCache::getFromMemory (BinaryData::twilight_reading_png, BinaryData::twilight_reading_pngSize);
     trixieImg = ImageCache::getFromMemory (BinaryData::trixie_png, BinaryData::trixie_pngSize);
     addChildComponent (*library);
+    gumballPage = std::make_unique<GumballPage>();
+    gumballPage->getRows = [this]
+    {
+        // every control balloon in the room right now, a row for each bow or gift box
+        static const char* const names[] = { "loop", "caught", "spectral", "grains", "stutter", "pitch", "reverb" };
+        static const int place[] = { 4, 5, 0, 2, 6, 1, 3 };   // where each bow's row goes: spectral, pitch, grains, reverb, loop, caught, stutter
+        std::vector<GumballPage::Row> rows;
+        for (auto* f : floaters)
+        {
+            auto* b = dynamic_cast<Balloon*> (f);
+            if (b == nullptr || ! b->alive) continue;
+            const int key = b->anchor < firstBox ? place[jlimit (0, 6, b->anchor)] : 100 + (b->anchor - firstBox);
+            auto it = std::find_if (rows.begin(), rows.end(), [key] (const GumballPage::Row& r) { return r.key == key; });
+            if (it == rows.end())
+            {
+                GumballPage::Row r;
+                r.key = key;
+                r.hue = b->hue;
+                r.name = b->anchor < firstBox ? String (names[jlimit (0, 6, b->anchor)]) : storeItemName (b->anchor - firstBox).toLowerCase();
+                rows.push_back (std::move (r));
+                it = rows.end() - 1;
+            }
+            // the balloon's name, without the effect's own name in front where the row already says it
+            auto lines = StringArray::fromLines (b->label);
+            lines.removeEmptyStrings();
+            String label = lines.joinIntoString (" ");
+            if (lines.size() == 2 && (it->name.contains (lines[0].toLowerCase()) || lines[0].toLowerCase().contains (it->name))) label = lines[1];
+            it->knobs.push_back ({ &b->parameter(), label, b->isToggle, b->isChoice, b->isStepped });
+        }
+        std::sort (rows.begin(), rows.end(), [] (const GumballPage::Row& a, const GumballPage::Row& b) { return a.key < b.key; });
+        return rows;
+    };
+    gumballPage->onActivity = [this] { noteActivity(); };
+    addChildComponent (*gumballPage);
     storeShelves = std::make_unique<StoreShelves> (*this);
     overlay.addChildComponent (*storeShelves);
     rainboomLayer = std::make_unique<RainboomLayer> (*this);
@@ -891,7 +936,7 @@ void FreakiePieEditor::resized()
     content.setTransform (AffineTransform::scale (s));
     overlay.setBounds (0, 0, designW, designH);
     overlay.setTransform (AffineTransform::scale (s));
-    for (Component* c : { (Component*) chalkboard.get(), (Component*) library.get() })
+    for (Component* c : { (Component*) chalkboard.get(), (Component*) library.get(), (Component*) gumballPage.get() })
         if (c != nullptr) c->setTransform (AffineTransform::scale (s));
 }
 
@@ -2074,6 +2119,15 @@ namespace
           "Snow and a heatwave never come together: turning one on sends the other away.\n\n"
           "A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.\n\n"
           "With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there." },
+        { "More weather",
+          "Under the first row of weather switches is a second, smaller row: fog, wind, hail, aurora and twister.\n\n"
+          "Fog blurs every attack. The sound goes through six short echoes too close together to hear apart, so a hit loses its edge without growing a tail, and the highs sink. A pale haze drifts through the shop.\n\n"
+          "Wind comes in gusts. The sound is read through a delay that keeps drifting, so its pitch wavers a few cents sharp and flat, up to about a fifth of a semitone in a strong gust. Each gust swells the sound a little and leans it to one side, and the balloons lean over with it. The wind blows the fog away: turning one on sends the other off.\n\n"
+          "Hail throws hailstones. Each one is a tiny slice of the last moment of your sound, hit hard and then bouncing, quicker and quieter, like a ball dropped on a table. Every stone lands somewhere else between left and right.\n\n"
+          "The aurora plays your sound an octave up into a long reverb. It hangs in four curtains across the stereo field, and each curtain swells and fades by itself.\n\n"
+          "Twister starts a whirlwind that lasts between 10 and 20 seconds. The pitch climbs a fifth and falls back while the sound whirls from side to side, faster and faster, and the balloons are swept round with it. With wind and clouds both on, one comes by itself every few minutes.\n\n"
+          "The rainbow has no switch. When the rain stops under a clear sky (no clouds, no snow) after at least 20 seconds of rain, a rainbow stands over the shop for about 25 seconds. It is your sound in seven colours, from red, the lowest, on the left to violet, the highest, on the right, each colour arriving a little after the one before.\n\n"
+          "Auto weather knows all of these. Fog comes after cloud, rain or snow. Wind can blow up a storm. Hail falls out of a storm, and an aurora follows a clear spell." },
         { "Sonic rainboom",
           "The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and Rainbow Dash dives in from the sky, faster and faster, the rainbow streaming out behind her, until she breaks the sound barrier: a boom and a rainbow at the same moment.\n\n"
           "On the way in your sound is squeezed up in pitch, the way a sound rushing towards you would be, with a rush of air under it. The boom has the real shape of a sonic boom, a double crack. "
@@ -2087,6 +2141,12 @@ namespace
           "The box takes a place among the other effects, and the order list moves it about like the rest. Width spreads the effect from mono in the middle to wide stereo.\n\n"
           "Pick a bought effect again to give it back, or pop one of its balloons with the pin. Pop everything sends them all back at once.\n\n"
           "The tuned effects in the store follow the scale as well. The ring mod multiplies the sound by a tone, and with follow turned up the tone rises as the sound gets louder." },
+        { "The gumball menu",
+          "Click gumballs, under the rainboom's cloud at the top right, to open the gumball menu. It shows every control in the shop again as a gumball that stays where it is, for when you'd rather not chase a balloon. There is one row for each effect, in its balloons' colour.\n\n"
+          "Each gumball is a glass ball that fills with colour as its value goes up, with the value written inside. Drag one up or down to turn it (hold shift for fine changes), or scroll over it. Click a switch to flip it. Click a setting like shape to step to the next one, or right-click for the one before. Double-click puts a gumball back how it started. Point at one to read its full name and value.\n\n"
+          "The gumballs and the balloons are the same controls. Turn one and the other follows, and the balloons still work just as they did.\n\n"
+          "When an effect's balloons come into the room, bought at the store or dropped by the lightning, its row of gumballs pops in here. When they pop, the row pops out. With many effects bought, short rows share a line and the page scrolls.\n\n"
+          "Click the cross or press escape to go back." },
         { "The chalkboard",
           "Click the little easel on the floor to bring the chalkboard forward. It has two pages, written along the top.\n\n"
           "On grain shape, draw across the board to make the life of one grain, from start on the left to end on the right, with loud at the top. Drawing switches the grains to your shape.\n\n"
@@ -2944,6 +3004,7 @@ void FreakiePieEditor::contentMouse (const MouseEvent& e, int phase)
                 return;
             }
         if (helpButton.contains (p) && library != nullptr) { library->open(); library->grabKeyboardFocus(); }
+        else if (gumballButton.contains (p)) openGumballs();
         else if (resetButton.contains (p)) resetEverything();
         else if (rainboomButton.contains (p))
         {
@@ -3292,6 +3353,7 @@ void FreakiePieEditor::step (float h)
         const float thaw = 1.0f - 0.92f * b->frost;   // frozen balloons barely drift
         b->vel.y += buoyancy * lift * h * (b->frost > 0.5f ? thaw : 1.0f);
         b->vel += breeze * h * thaw;
+        if (skyArt != nullptr) b->vel += skyArt->pushAt (b->pos) * h * thaw;   // the wind leans them over; a twister whirls them
         b->vel *= 1.0f - jmin (1.0f, (damping + 9.0f * b->frost) * h);
         b->pos += b->vel * h;
     }
@@ -3474,6 +3536,8 @@ void FreakiePieEditor::timerCallback()
     followPreset (dt);
     if (chalkboard != nullptr) chalkboard->step (dt);
     if (library != nullptr) library->step (dt);
+    if (gumballPage != nullptr) gumballPage->step (dt);
+    skyStep (dt);
     if (storeShelves != nullptr) storeShelves->step (dt);
     if (weatherBar != nullptr)
     {
@@ -4326,6 +4390,7 @@ void FreakiePieEditor::paintContent (Graphics& g)
             g.fillRect (full);
         }
     }
+    if (skyArt != nullptr) skyArt->paintBehind (g);   // the aurora and the rainbow, in the sky behind everything
 
 
     g.setGradientFill (ColourGradient (palette::dustyPink.withAlpha (0.07f), designW * 0.5f, designH * 0.6f,
@@ -4496,6 +4561,7 @@ void FreakiePieEditor::paintContent (Graphics& g)
     drawHelpButton (g);
     drawResetButton (g);
     drawRainboomButton (g);
+    drawGumballButton (g);
     drawPopsButton (g);
 
     // (the weather switches are drawn by the weather row, on its own layer above the balloons)
@@ -4522,6 +4588,7 @@ void FreakiePieEditor::paintContent (Graphics& g)
 void FreakiePieEditor::paintOver (Graphics& g)
 {
     drawSkyClouds (g);   // over the balloons: the ones inside peek through
+    if (skyArt != nullptr) skyArt->paintOver (g);   // fog, the wind's streaks, hailstones, the twister
     for (auto& f : flakes)
     {
         const float tw = 0.7f + 0.3f * std::sin ((float) clock * 3.0f + f.phase);
@@ -4915,6 +4982,8 @@ bool WeatherBar::isOn (int which) const noexcept
         case 1: return ed.rainOn();
         case 2: return ed.snowOn();
         case 3: return ed.heatOn();
+        case 5: case 6: case 7: case 8: return ed.skyValue[which - 5] > 0.5f;
+        case 9: return ed.proc.twisterAmount.load() > 0.0f;
         default: return ed.autoOn();
     }
 }
@@ -4923,6 +4992,7 @@ int WeatherBar::buttonAt (Point<float> p) const noexcept
 {
     const Rectangle<float> r[] = { ed.cloudyButton, ed.cloudButton, ed.snowButton, ed.heatButton, ed.autoButton };
     for (int i = 0; i < 5; ++i) if (r[i].contains (p)) return i;
+    if (const int b = SkyArt::buttonAt (p); b >= 0) return 5 + b;
     return -1;
 }
 
@@ -4933,6 +5003,19 @@ bool WeatherBar::hitTest (int x, int y)
 
 void WeatherBar::toggle (int which)
 {
+    if (which == 9) { ed.proc.requestTwister(); ed.noteActivity(); return; }   // the twister: one starts now
+    if (which >= 5 && which <= 8)
+    {
+        auto& att = ed.skyAtt[which - 5];
+        if (att == nullptr) return;
+        const bool on = ed.skyValue[which - 5] <= 0.5f;
+        // the wind blows the fog away: turning one on sends the other off
+        if (on && which == 5 && ed.skyValue[1] > 0.5f && ed.skyAtt[1] != nullptr) ed.skyAtt[1]->setValueAsCompleteGesture (0.0f);
+        if (on && which == 6 && ed.skyValue[0] > 0.5f && ed.skyAtt[0] != nullptr) ed.skyAtt[0]->setValueAsCompleteGesture (0.0f);
+        att->setValueAsCompleteGesture (on ? 1.0f : 0.0f);
+        ed.noteActivity();
+        return;
+    }
     std::unique_ptr<ParameterAttachment>* atts[] = { &ed.cloudyAtt, &ed.rainAtt, &ed.snowAtt, &ed.heatAtt, &ed.autoAtt };
     if (which < 0 || which > 4 || *atts[which] == nullptr) return;
     const bool turningOn = ! isOn (which);
@@ -4971,6 +5054,61 @@ void WeatherBar::paint (Graphics& g)
     ed.drawSnowButton (g);
     ed.drawHeatButton (g);
     ed.drawAutoSwitch (g);
+    if (ed.skyArt != nullptr)
+        for (int i = 0; i < SkyArt::kButtons; ++i) ed.skyArt->drawButton (g, i, isOn (5 + i));
+}
+
+//==============================================================================
+// the newer weather's pictures follow the sound: how thick the fog is, how hard it's blowing, every
+// hailstone's bounce, the rainbow and the aurora fading in and out, the twister turning
+void FreakiePieEditor::skyStep (float dt)
+{
+    if (skyArt == nullptr) return;
+    SkyArt::In in;
+    in.fog = jmax (proc.fogAmount.load(), 0.0f);
+    in.windGust = proc.windGust.load();
+    in.windLean = proc.windLean.load();
+    in.hailAmt = proc.hailAmount.load();
+    in.hailHits = proc.hailHits.load();
+    in.rainbow = proc.rainbowAmount.load();
+    in.aurora = proc.auroraAmount.load();
+    in.twister = proc.twisterAmount.load();
+    in.twisterAngle = proc.twisterAngle.load();
+    for (int j = 0; j < 4; ++j) in.curtains[j] = proc.auroraCurtain[(size_t) j].load();
+    skyArt->step (dt, in, (float) designW, (float) designH, rnd);
+}
+
+// the gumball machine's button: a little machine under the rainboom's cloud
+void FreakiePieEditor::drawGumballButton (Graphics& g) const
+{
+    const auto r = gumballButton;
+    const Point<float> c (r.getX() + 16.0f, r.getCentreY());
+    g.setColour (Colours::black.withAlpha (0.3f));
+    g.fillEllipse (Rectangle<float> (18.0f, 18.0f).withCentre (c.translated (1.5f, -1.5f)));
+    g.setColour (Colours::white.withAlpha (0.22f));
+    g.fillEllipse (Rectangle<float> (18.0f, 18.0f).withCentre (c.translated (0.0f, -3.0f)));
+    static const int hues[] = { balloonPink, balloonYellow, balloonMint, balloonBlue, balloonOrange };
+    for (int i = 0; i < 5; ++i)
+    {
+        const float a = (float) i * 1.2566f + 0.3f * std::sin ((float) clock * 0.9f);
+        g.setColour (balloonColours (hues[i]).fill);
+        g.fillEllipse (Rectangle<float> (5.6f, 5.6f).withCentre (c.translated (4.4f * std::cos (a), -3.0f + 4.4f * std::sin (a))));
+    }
+    g.setColour (Colours::white.withAlpha (0.8f));
+    g.drawEllipse (Rectangle<float> (18.0f, 18.0f).withCentre (c.translated (0.0f, -3.0f)), 1.2f);
+    g.setColour (Colour (0xffe2477f));
+    g.fillRoundedRectangle (c.x - 7.0f, c.y + 5.0f, 14.0f, 7.0f, 2.0f);
+    g.setFont (SadLookAndFeel::uiFont (11.0f, true));
+    g.setColour (palette::blush.withAlpha (0.85f));
+    g.drawText ("gumballs", r.withTrimmedLeft (30.0f), Justification::centredLeft);
+}
+
+void FreakiePieEditor::openGumballs()
+{
+    if (gumballPage == nullptr) return;
+    gumballPage->open();
+    gumballPage->grabKeyboardFocus();
+    noteActivity();
 }
 
 //==============================================================================

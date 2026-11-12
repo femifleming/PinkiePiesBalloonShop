@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "MoreUi.h"
 #include "RainboomArt.h"
 #include <BinaryData.h>
 
@@ -801,6 +802,16 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
         heatAtt = std::make_unique<ParameterAttachment> (*h, [this] (float v) { heatValue = v; });
         heatAtt->sendInitialUpdate();
     }
+    {
+        const char* skyIds[4] = { ids::fog, ids::wind, ids::hail, ids::aurora };
+        for (int i = 0; i < 4; ++i)
+            if (auto* prm = p.apvts.getParameter (skyIds[i]))
+            {
+                skyAtt[i] = std::make_unique<ParameterAttachment> (*prm, [this, i] (float v) { skyValue[i] = v; });
+                skyAtt[i]->sendInitialUpdate();
+            }
+        skyArt = std::make_unique<SkyArt>();
+    }
     if (auto* aw = p.apvts.getParameter (ids::autoWeather))
     {
         autoAtt = std::make_unique<ParameterAttachment> (*aw, [this] (float v) { autoValue = v; });
@@ -872,6 +883,56 @@ FreakiePieEditor::FreakiePieEditor (FreakiePieProcessor& p)
     library->twilight = ImageCache::getFromMemory (BinaryData::twilight_reading_png, BinaryData::twilight_reading_pngSize);
     trixieImg = ImageCache::getFromMemory (BinaryData::trixie_png, BinaryData::trixie_pngSize);
     addChildComponent (*library);
+    gumballPage = std::make_unique<GumballPage>();
+    gumballPage->getRows = [this]
+    {
+        // every control balloon in the room right now, a row for each bow or gift box
+        static const char* const names[] = { "loop", "caught", "spectral", "grains", "stutter", "pitch", "reverb" };
+        static const int place[] = { 4, 5, 0, 2, 6, 1, 3 };   // where each bow's row goes: spectral, pitch, grains, reverb, loop, caught, stutter
+        std::vector<GumballPage::Row> rows;
+        for (auto* f : floaters)
+        {
+            auto* b = dynamic_cast<Balloon*> (f);
+            if (b == nullptr || ! b->alive) continue;
+            const int key = b->anchor < firstBox ? place[jlimit (0, 6, b->anchor)] : 100 + (b->anchor - firstBox);
+            auto it = std::find_if (rows.begin(), rows.end(), [key] (const GumballPage::Row& r) { return r.key == key; });
+            if (it == rows.end())
+            {
+                GumballPage::Row r;
+                r.key = key;
+                r.hue = b->hue;
+                r.name = b->anchor < firstBox ? String (names[jlimit (0, 6, b->anchor)]) : storeItemName (b->anchor - firstBox).toLowerCase();
+                rows.push_back (std::move (r));
+                it = rows.end() - 1;
+            }
+            // the balloon's name, without the effect's own name in front where the row already says it
+            auto lines = StringArray::fromLines (b->label);
+            lines.removeEmptyStrings();
+            String label = lines.joinIntoString (" ");
+            if (lines.size() == 2 && (it->name.contains (lines[0].toLowerCase()) || lines[0].toLowerCase().contains (it->name))) label = lines[1];
+            it->knobs.push_back ({ &b->parameter(), label, b->isToggle, b->isChoice, b->isStepped });
+        }
+        {
+            // the sphere's own tokens (how the grains fly, how many, how far, the order) get a row too
+            GumballPage::Row r;
+            r.key = 50; r.hue = balloonLilac; r.name = "sphere";
+            auto add = [&] (RangedAudioParameter* prm, const String& label)
+            {
+                if (prm == nullptr) return;
+                r.knobs.push_back ({ prm, label, dynamic_cast<AudioParameterBool*> (prm) != nullptr, dynamic_cast<AudioParameterChoice*> (prm) != nullptr,
+                                     dynamic_cast<AudioParameterInt*> (prm) != nullptr });
+            };
+            for (auto* id : { ids::flight, ids::flightSpeed, ids::spread, ids::deviate, ids::grainMode, ids::doppler, ids::ambiOrder })
+                for (auto* pl : pills)
+                    if (pl->param != nullptr && pl->param->paramID == id) add (pl->param, pl->name == "grains" ? String ("grain mode") : pl->name);
+            add (proc.apvts.getParameter (ids::grains), "how many");
+            if (! r.knobs.empty()) rows.push_back (std::move (r));
+        }
+        std::sort (rows.begin(), rows.end(), [] (const GumballPage::Row& a, const GumballPage::Row& b) { return a.key < b.key; });
+        return rows;
+    };
+    gumballPage->onActivity = [this] { noteActivity(); };
+    addChildComponent (*gumballPage);
     storeShelves = std::make_unique<StoreShelves> (*this);
     overlay.addChildComponent (*storeShelves);
     rainboomLayer = std::make_unique<RainboomLayer> (*this);
@@ -977,7 +1038,7 @@ void FreakiePieEditor::resized()
     content.setTransform (AffineTransform::scale (s));
     overlay.setBounds (0, 0, designW, designH);
     overlay.setTransform (AffineTransform::scale (s));
-    for (Component* c : { (Component*) chalkboard.get(), (Component*) library.get() })
+    for (Component* c : { (Component*) chalkboard.get(), (Component*) library.get(), (Component*) gumballPage.get() })
         if (c != nullptr) c->setTransform (AffineTransform::scale (s));
 }
 
@@ -1210,6 +1271,28 @@ void FreakiePieEditor::drawToken (Graphics& g, const Pill& pl) const
                 else if (m == 8) { const float rr = 0.2f + 0.6f * (0.5f - 0.5f * std::cos (u)); q = { rr * 0.8f, -rr * 0.6f }; }   // breathe: out and in
                 else if (m == 9) q = { 0.3f * std::sin (u * 2.0f), -0.75f + 1.5f * (float) i / 48.0f };        // fall
                 else if (m == 10) q = { (std::abs (std::fmod (u / MathConstants<float>::pi, 2.0f) - 1.0f) * 2.0f - 1.0f) * 0.8f, 0.0f };   // ping-pong
+                else if (m >= 11)
+                {
+                    const float k = (float) i / 48.0f;
+                    auto tri = [] (float x) { x -= std::floor (x); return x < 0.5f ? 4.0f * x - 1.0f : 3.0f - 4.0f * x; };
+                    switch (m)
+                    {
+                        case 11: q = { 0.8f * tri (k), -0.5f * tri (k) }; break;                                              // line: wall to wall and back
+                        case 12: { const float th = 1.1f * std::sin (u); q = { 0.9f * std::sin (th), -0.65f + 1.15f * std::cos (th) }; break; }   // pendulum
+                        case 13: q = { 0.16f * std::sin (u * 4.0f), 0.75f * tri (k) }; break;                                 // column
+                        case 14: { const int side = jmin (3, (int) (k * 4.0f)); const float f = k * 4.0f - (float) side, e = 2.0f * f - 1.0f;
+                                   q = side == 0 ? Point<float> (e, -1.0f) : side == 1 ? Point<float> (1.0f, e) : side == 2 ? Point<float> (-e, 1.0f) : Point<float> (-1.0f, -e);
+                                   q *= 0.62f; break; }                                                                       // soundcube: round the walls
+                        case 15: { const float rr = 0.12f + 0.75f * k; q = { rr * std::cos (u * 3.0f), rr * 0.7f * std::sin (u * 3.0f) }; break; }   // sonotron: the spiral
+                        case 16: q = { 0.8f * tri (k), 0.55f * tri (2.0f * k + 0.25f) }; break;                               // paraboloid: crossing straight lines
+                        case 17: q = { 0.8f * tri (1.5f * k), 0.55f * tri (2.5f * k + 0.3f) }; break;                         // gas: straight, bouncing
+                        case 18: { const float a = (float) jmin (5, (int) (k * 6.0f)) * MathConstants<float>::pi / 3.0f, a2 = a + MathConstants<float>::pi / 3.0f, f = k * 6.0f - std::floor (jmin (5.999f, k * 6.0f));
+                                   q = Point<float> (std::cos (a), std::sin (a)) * (0.75f * (1.0f - f)) + Point<float> (std::cos (a2), std::sin (a2)) * (0.75f * f); break; }   // nomos: the cube's outline
+                        default: { static const float qx[] = { -0.45f, 0.45f, -0.45f, 0.45f, -0.45f }, qy[] = { -0.4f, -0.4f, 0.4f, 0.4f, -0.4f };
+                                   const int cell = jmin (3, (int) (k * 4.0f)); const float f = fp::smoothstep ((k * 4.0f - (float) cell) * 2.0f);
+                                   q = { qx[cell] + (qx[cell + 1] - qx[cell]) * f, qy[cell] + (qy[cell + 1] - qy[cell]) * f }; break; }   // screens: cell to cell
+                    }
+                }
                 else q = { 0.0f, 0.0f };
                 q = c + q * (R * 0.62f);
                 if (i == 0) path.startNewSubPath (q); else path.lineTo (q);
@@ -2320,6 +2403,8 @@ namespace
           "Spiral winds them round you, climbing and sinking. Lissajous traces looping figures, each grain at its own rates. "
           "Rossler flies them on the Rossler attractor, a loose coil that now and then flicks up. Breathe sends them out to the glass and back in again, like breathing. "
           "Fall drops them from the top of the sphere to the bottom, over and over. Ping-pong throws them straight across the sphere, from one side to the other.\n\n"
+          "Four flights follow Bernhard Leitner, who since 1968 has built rooms out of sound moving along lines of loudspeakers. Line runs each grain along its own straight line through the room and through you, from wall to wall and back at an even pace. Pendulum hangs each grain from a point overhead and swings it through underneath you, slow at the ends and quick in the middle. Column makes a vertical space: each grain climbs and sinks along its own column standing round you. Soundcube is his Soundcube of 1969, a cube with a grid of loudspeakers on every wall (nine to a wall here). The grains don't fly. They step from one loudspeaker to the next, drawing a ring round you and then another one higher or lower.\n\n"
+          "Five follow Iannis Xenakis. Sonotron is the accelerator of sound particles from Terretektorh, and the turning drums that end Persephassa: all the grains on one ring that turns faster and faster along a logarithmic spiral as it widens, then starts again the other way. Paraboloid glides every grain along its own straight line, and the lines together draw the saddle of the Philips Pavilion, as the string glissandi of Metastaseis do. Gas is Pithoprakta: the grains are the molecules of a gas, each flying straight at a speed drawn from the Maxwell-Boltzmann distribution until it hits the glass and leaves at a new one. Nomos puts the grains on the corners of a cube that turns from one of its 24 rotations to the next, each the product of the two before it, as in Nomos Alpha. Screens cuts the sphere into eight cells and moves each grain from cell to cell by a Markov chain, with the two transition tables of Analogique A.\n\n"
           "Distance is the size of the bubble you're in, from 1 metre to 50. In a small bubble everything is close and loud and the room answers quickly; "
           "in a big one everything is far away, quieter, a little duller and roomier. It sounds the way distance does, after the IEM RoomEncoder: "
           "the sound takes longer to arrive from further away (so anything flying towards you or away bends in pitch, like a passing car), "
@@ -2391,6 +2476,15 @@ namespace
           "Snow and a heatwave never come together: turning one on sends the other away.\n\n"
           "A heatwave melts the sound into a slow smear over its fade-in time (right-click the hot sun to set its fade in and fade out, like the snow's): whatever you play is spread across many seconds, and the held sound keeps drifting towards whatever comes next, like a stretched recording that never quite stops. The top end softens and swells as the hot air wobbles, gently, nothing like the rain. Pinkie can't take it and flops down flat, and if it rains in the heat she's soaked through.\n\n"
           "With auto weather on, the sky looks after itself. Every few minutes the weather turns, the way it does outside: clear skies cloud over, the cloud brings rain or a storm or snow, a long hot spell might end in a summer storm. Each spell lasts somewhere between a minute and twelve, and the dial shows what the sky is doing. You can still flip the switches yourself; auto carries on from there." },
+        { "More weather",
+          "Under the first row of weather switches is a second, smaller row: fog, wind, hail, aurora and twister.\n\n"
+          "Fog blurs every attack. The sound goes through six short echoes too close together to hear apart, so a hit loses its edge without growing a tail, and the highs sink. In the sphere the fog also hides where things are. The whole scene goes a little soft at the edges, and fog banks drift through the ball: a grain inside one comes from all round you instead of from one point, duller and with more of the room on it, until it flies out again.\n\n"
+          "Wind comes in gusts. The sound is read through a delay that keeps drifting, so its pitch wavers a few cents sharp and flat, up to about a fifth of a semitone in a strong gust. The wind also blows every grain the same way across the sphere, harder in each gust, and the balloons lean over with it. The wind blows the fog away: turning one on sends the other off.\n\n"
+          "Hail throws hailstones. Each one is a tiny slice of the last moment of your sound, hit hard and then bouncing, quicker and quieter, like a ball dropped on a table. Every stone lands high overhead at its own bearing and bounces its way down to the floor.\n\n"
+          "The aurora plays your sound an octave up into a long reverb. It hangs in four curtains high up round you. They drift slowly round the sphere, and each one swells and fades by itself.\n\n"
+          "Twister starts a whirlwind that lasts between 10 and 20 seconds. It takes every grain up into one spiral, a funnel that is narrow at the floor and wide at the top, and the pitch climbs a fifth and falls back while it turns. When it is over the grains fly back to what they were doing. With wind and clouds both on, one comes by itself every few minutes.\n\n"
+          "The rainbow has no switch. When the rain stops under a clear sky (no clouds, no snow) after at least 20 seconds of rain, a rainbow stands in the sphere for about 25 seconds: seven arcs across one side of the sky, red the lowest sound and the outermost arc, violet the highest and the innermost, each colour arriving a little after the one before.\n\n"
+          "Auto weather knows all of these. Fog comes after cloud, rain or snow. Wind can blow up a storm. Hail falls out of a storm, and an aurora follows a clear spell." },
         { "Sonic rainboom",
           "The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and Rainbow Dash dives in from the sky, faster and faster, the rainbow streaming out behind her, until she breaks the sound barrier: a boom and a rainbow at the same moment.\n\n"
           "On the way in your sound is squeezed up in pitch, the way a sound rushing towards you would be, with a rush of air under it. The boom has the real shape of a sonic boom, a double crack. "
@@ -2406,6 +2500,12 @@ namespace
           "The box takes a place among the other effects, and the order list moves it about like the rest. Width spreads the effect from mono in the middle to wide stereo.\n\n"
           "Pick a bought effect again to give it back, or pop one of its balloons with the pin. Pop everything sends them all back at once.\n\n"
           "The tuned effects in the store follow the scale as well. The ring mod multiplies the sound by a tone, and with follow turned up the tone rises as the sound gets louder." },
+        { "The gumball menu",
+          "Click gumballs, under the rainboom's cloud at the top right, to open the gumball menu. It shows every control in the palace again as a gumball that stays where it is, for when you'd rather not chase a balloon. There is one row for each effect, in its balloons' colour. The sphere's own tokens (flight, speed, distance, deviate, grain mode, doppler, order and how many grains) have a row too.\n\n"
+          "Each gumball is a glass ball that fills with colour as its value goes up, with the value written inside. Drag one up or down to turn it (hold shift for fine changes), or scroll over it. Click a switch to flip it. Click a setting like shape to step to the next one, or right-click for the one before. Double-click puts a gumball back how it started. Point at one to read its full name and value.\n\n"
+          "The gumballs and the balloons are the same controls. Turn one and the other follows, and the balloons still work just as they did.\n\n"
+          "When an effect's balloons come into the room, bought at the store or dropped by the lightning, its row of gumballs pops in here. When they pop, the row pops out. With many effects bought, short rows share a line and the page scrolls.\n\n"
+          "Click the cross or press escape to go back." },
         { "The chalkboard",
           "Click the little easel on the floor to bring the chalkboard forward. It has two pages, written along the top.\n\n"
           "On grain shape, draw across the board to make the life of one grain, from start on the left to end on the right, with loud at the top. Drawing switches the grains to your shape.\n\n"
@@ -3275,6 +3375,7 @@ void FreakiePieEditor::contentMouse (const MouseEvent& e, int phase)
                 return;
             }
         if (helpButton.contains (p) && library != nullptr) { library->open(); library->grabKeyboardFocus(); }
+        else if (gumballButton.contains (p)) openGumballs();
         else if (resetButton.contains (p)) resetEverything();
         else if (rainboomButton.contains (p))
         {
@@ -3777,6 +3878,12 @@ void FreakiePieEditor::step (float h)
         const float thaw = 1.0f - 0.92f * b->frost;
         b->wv.z += buoyancy * lift * h * (b->frost > 0.5f ? thaw : 1.0f);
         b->wv += breeze * (h * thaw);
+        {
+            // the wind leans them the way it blows (the way it pushes the grains); a twister whirls them round and up
+            const float gust = proc.windGust.load(), head = proc.windHeading.load(), tw = proc.twisterAmount.load();
+            if (gust > 0.0f) b->wv += Vec3 { std::cos (head), std::sin (head), 0.0f } * (520.0f * gust * h * thaw);
+            if (tw > 0.0f) b->wv += (Vec3 { -b->w.y, b->w.x, 0.0f }.normalised() * 700.0f + Vec3 { 0.0f, 0.0f, 260.0f }) * (tw * h * thaw);
+        }
         b->wv *= 1.0f - jmin (1.0f, (damping + 9.0f * b->frost) * h);
         b->w += b->wv * h;
     }
@@ -3980,6 +4087,8 @@ void FreakiePieEditor::timerCallback()
     followPreset (dt);
     if (chalkboard != nullptr) chalkboard->step (dt);
     if (library != nullptr) library->step (dt);
+    if (gumballPage != nullptr) gumballPage->step (dt);
+    skyStep (dt);
     if (storeShelves != nullptr) storeShelves->step (dt);
     if (weatherBar != nullptr)
     {
@@ -4323,6 +4432,17 @@ void FreakiePieEditor::drawSkyClouds (Graphics& g) const
                     const float sz = (2.0f + (float) (i % 3)) * c.s;
                     g.setColour (Colours::white.withAlpha (a * 0.85f * (0.6f + 0.4f * std::sin (t * 3.0f + (float) i))));
                     g.fillEllipse (Rectangle<float> (sz, sz).withCentre (q));
+                }
+                break;
+            case fp::SkyPatches::fog:   // a bank of fog: soft, pale, slowly turning over
+                for (int k = 0; k < 3; ++k)
+                {
+                    const float r = (46.0f + 10.0f * (float) k) * c.s;
+                    const auto q = at + Point<float> (std::sin (t * 0.3f + (float) k * 2.1f) * 14.0f * c.s, (float) (k - 1) * 9.0f * c.s);
+                    Graphics::ScopedSaveState ss (g);
+                    g.addTransform (AffineTransform::scale (1.0f, 0.65f, q.x, q.y));
+                    g.setGradientFill (ColourGradient (Colour (0xfff4f7fb).withAlpha (0.3f * a), q.x, q.y, Colour (0x00f4f7fb), q.x + r, q.y, true));
+                    g.fillEllipse (Rectangle<float> (2.0f * r, 2.0f * r).withCentre (q));
                 }
                 break;
             case fp::SkyPatches::heat:   // a warm wobble in the air
@@ -4886,6 +5006,7 @@ void FreakiePieEditor::paintContent (Graphics& g)
     // further you zoom, so the balloons stand out; drawn once and reused until it changes
     const float blur = jlimit (0.0f, 1.0f, (viewZoom - 1.0f) / 0.8f);
     drawRoom (g, full, blur);
+    if (skyArt != nullptr) skyArt->paintBehind (g);   // the aurora and the rainbow, in the sky behind the sphere
 
     // (no title: the weather bar sits where it was)
 
@@ -4980,6 +5101,7 @@ void FreakiePieEditor::paintOver (Graphics& g)
 {
     drawSphereFront (g);
     drawSkyClouds (g);   // over the balloons: the ones inside peek through
+    if (skyArt != nullptr) skyArt->paintOver (g);   // fog, the wind's streaks, hailstones, the twister
     for (auto& f : flakes)
     {
         const float tw = 0.7f + 0.3f * std::sin ((float) clock * 3.0f + f.phase);
@@ -5373,6 +5495,8 @@ bool WeatherBar::isOn (int which) const noexcept
         case 1: return ed.rainOn();
         case 2: return ed.snowOn();
         case 3: return ed.heatOn();
+        case 5: case 6: case 7: case 8: return ed.skyValue[which - 5] > 0.5f;
+        case 9: return ed.proc.twisterAmount.load() > 0.0f;
         default: return ed.autoOn();
     }
 }
@@ -5381,6 +5505,7 @@ int WeatherBar::buttonAt (Point<float> p) const noexcept
 {
     const Rectangle<float> r[] = { ed.cloudyButton, ed.cloudButton, ed.snowButton, ed.heatButton, ed.autoButton };
     for (int i = 0; i < 5; ++i) if (r[i].contains (p)) return i;
+    if (const int b = SkyArt::buttonAt (p); b >= 0) return 5 + b;
     return -1;
 }
 
@@ -5391,6 +5516,19 @@ bool WeatherBar::hitTest (int x, int y)
 
 void WeatherBar::toggle (int which)
 {
+    if (which == 9) { ed.proc.requestTwister(); ed.noteActivity(); return; }   // the twister: one starts now
+    if (which >= 5 && which <= 8)
+    {
+        auto& att = ed.skyAtt[which - 5];
+        if (att == nullptr) return;
+        const bool on = ed.skyValue[which - 5] <= 0.5f;
+        // the wind blows the fog away: turning one on sends the other off
+        if (on && which == 5 && ed.skyValue[1] > 0.5f && ed.skyAtt[1] != nullptr) ed.skyAtt[1]->setValueAsCompleteGesture (0.0f);
+        if (on && which == 6 && ed.skyValue[0] > 0.5f && ed.skyAtt[0] != nullptr) ed.skyAtt[0]->setValueAsCompleteGesture (0.0f);
+        att->setValueAsCompleteGesture (on ? 1.0f : 0.0f);
+        ed.noteActivity();
+        return;
+    }
     std::unique_ptr<ParameterAttachment>* atts[] = { &ed.cloudyAtt, &ed.rainAtt, &ed.snowAtt, &ed.heatAtt, &ed.autoAtt };
     if (which < 0 || which > 4 || *atts[which] == nullptr) return;
     const bool turningOn = ! isOn (which);
@@ -5429,6 +5567,61 @@ void WeatherBar::paint (Graphics& g)
     ed.drawSnowButton (g);
     ed.drawHeatButton (g);
     ed.drawAutoSwitch (g);
+    if (ed.skyArt != nullptr)
+        for (int i = 0; i < SkyArt::kButtons; ++i) ed.skyArt->drawButton (g, i, isOn (5 + i));
+}
+
+//==============================================================================
+// the newer weather's pictures follow the sound: how thick the fog is, how hard it's blowing, every
+// hailstone's bounce, the rainbow and the aurora fading in and out, the twister turning
+void FreakiePieEditor::skyStep (float dt)
+{
+    if (skyArt == nullptr) return;
+    SkyArt::In in;
+    in.fog = jmax (proc.fogAmount.load(), 0.0f);
+    in.windGust = proc.windGust.load();
+    in.windLean = proc.windLean.load();
+    in.hailAmt = proc.hailAmount.load();
+    in.hailHits = proc.hailHits.load();
+    in.rainbow = proc.rainbowAmount.load();
+    in.aurora = proc.auroraAmount.load();
+    in.twister = proc.twisterAmount.load();
+    in.twisterAngle = proc.twisterAngle.load();
+    for (int j = 0; j < 4; ++j) in.curtains[j] = proc.auroraCurtain[(size_t) j].load();
+    skyArt->step (dt, in, (float) designW, (float) designH, rnd);
+}
+
+// the gumball machine's button: a little machine under the rainboom's cloud
+void FreakiePieEditor::drawGumballButton (Graphics& g) const
+{
+    const auto r = gumballButton;
+    const Point<float> c (r.getX() + 16.0f, r.getCentreY());
+    g.setColour (Colours::black.withAlpha (0.3f));
+    g.fillEllipse (Rectangle<float> (18.0f, 18.0f).withCentre (c.translated (1.5f, -1.5f)));
+    g.setColour (Colours::white.withAlpha (0.22f));
+    g.fillEllipse (Rectangle<float> (18.0f, 18.0f).withCentre (c.translated (0.0f, -3.0f)));
+    static const int hues[] = { balloonPink, balloonYellow, balloonMint, balloonBlue, balloonOrange };
+    for (int i = 0; i < 5; ++i)
+    {
+        const float a = (float) i * 1.2566f + 0.3f * std::sin ((float) clock * 0.9f);
+        g.setColour (balloonColours (hues[i]).fill);
+        g.fillEllipse (Rectangle<float> (5.6f, 5.6f).withCentre (c.translated (4.4f * std::cos (a), -3.0f + 4.4f * std::sin (a))));
+    }
+    g.setColour (Colours::white.withAlpha (0.8f));
+    g.drawEllipse (Rectangle<float> (18.0f, 18.0f).withCentre (c.translated (0.0f, -3.0f)), 1.2f);
+    g.setColour (Colour (0xffe2477f));
+    g.fillRoundedRectangle (c.x - 7.0f, c.y + 5.0f, 14.0f, 7.0f, 2.0f);
+    g.setFont (SadLookAndFeel::uiFont (11.0f, true));
+    g.setColour (palette::blush.withAlpha (0.85f));
+    g.drawText ("gumballs", r.withTrimmedLeft (30.0f), Justification::centredLeft);
+}
+
+void FreakiePieEditor::openGumballs()
+{
+    if (gumballPage == nullptr) return;
+    gumballPage->open();
+    gumballPage->grabKeyboardFocus();
+    noteActivity();
 }
 
 //==============================================================================
@@ -6667,6 +6860,7 @@ void FreakiePieEditor::drawRoomItems (Graphics& g)
     drawHelpButton (g);
     drawResetButton (g);
     drawRainboomButton (g);
+    drawGumballButton (g);
     drawPopsButton (g);
 }
 

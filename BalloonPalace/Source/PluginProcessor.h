@@ -12,6 +12,7 @@
 #include "dsp/Stutter.h"
 #include "dsp/TrixieNoise.h"
 #include "dsp/Rainboom.h"
+#include "dsp/MoreWeather.h"
 #include "dsp/Ambi.h"
 #include "dsp/Flight.h"
 #include "dsp/SpatialGranulator.h"
@@ -73,6 +74,12 @@ namespace ids
     inline constexpr const char* heatOut    = "heatOut";      // seconds for it to go away (5 s .. 5 min)
     inline constexpr const char* autoWeather = "autoWeather"; // the weather changes by itself, a spell every few minutes
     inline constexpr const char* cloudy     = "cloudy";       // clouds drift among the balloons; thunder; with rain, lightning
+    // more weather (see dsp/MoreWeather.h)
+    inline constexpr const char* fog        = "fog";          // every attack blurred, the highs sinking; fog banks hide where a grain is
+    inline constexpr const char* wind       = "wind";         // gusts bend the pitch and blow the grains across the sphere
+    inline constexpr const char* hail       = "hail";         // hailstones: tiny slices of the sound, bouncing down from overhead
+    inline constexpr const char* aurora     = "aurora";       // an octave up, ringing in slow curtains high round the sphere
+    inline constexpr const char* twister    = "twister";      // a switch: off -> on starts a whirlwind that takes the grains up
     inline constexpr const char* fxBypass   = "fxBypass";
     // the sphere
     inline constexpr const char* ambiOrder  = "ambiOrder";    // the Ambisonic order put out: 1st .. 7th (4 .. 64 channels)
@@ -179,6 +186,18 @@ public:
     std::atomic<float> snowAmount { 0.0f };   // how frozen the output is (0..1)
     std::atomic<float> heatAmount { 0.0f };   // how far the heatwave has come in (0..1)
 
+    // more weather, for the pictures
+    std::atomic<float> fogAmount { 0.0f }, windAmount { 0.0f }, windGust { 0.0f }, windLean { 0.0f }, windHeading { 0.0f };
+    std::atomic<float> hailAmount { 0.0f }, rainbowAmount { 0.0f }, auroraAmount { 0.0f }, twisterAmount { 0.0f }, twisterAngle { 0.0f };
+    std::array<std::atomic<float>, fp::Aurora::kCurtains> auroraCurtain {};
+    std::atomic<int> hailHits { 0 }, rainbows { 0 }, twisters { 0 };
+    std::atomic<float> rainbowAz { 0.0f }, auroraTurn { 0.0f };   // where the rainbow stands (its middle, radians), how far the curtains have drifted
+    struct StoneView { std::atomic<float> x { 0.0f }, y { 0.0f }, z { 0.0f }, on { 0.0f }; };
+    std::array<StoneView, fp::Hail::kStones> stoneView;
+    void requestTwister() noexcept { twRequests.fetch_add (1); }
+    void requestRainbow() noexcept { rwRequests.fetch_add (1); }
+    static fp::ambi::Vec3 rainbowPoint (float az, int band, float along) noexcept;   // a point of the bow (along: 0..1 from one foot to the other)
+
     // the rainboom: the editor asks for one (the button; a balloon flung hard, following it to where it
     // breaks); where it is, for the pictures
     void requestRainboom (float diveSeconds, bool followTarget = false) noexcept
@@ -200,6 +219,7 @@ public:
     // auto weather: while its switch is on, time passing (on the message thread) changes the sky
     void autoWeatherStep (double seconds);
     void keepSnowAndHeatApart();   // (on the message thread, once a second)
+    void keepFogAndWindApart();    // (the wind blows the fog away)
     fp::AutoWeather::Spell autoWeatherSpell() const noexcept { return autoSky.current(); }
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -294,6 +314,27 @@ private:
     std::array<std::unique_ptr<fp::SnowFreeze>, kPairs> snowFreeze;
     std::array<std::unique_ptr<fp::HeatWave>, kPairs> heatWave;
     fp::AutoWeather autoSky;
+    fp::Fog fog;
+    fp::Wind wind;
+    fp::Twister twister;
+    fp::Hail hail;
+    fp::Rainbow rainbow;
+    fp::Aurora aurora;
+    std::array<fp::ambi::Coefs, fp::Hail::kStones> hailWas {};
+    std::array<fp::ambi::Coefs, fp::Rainbow::kBands> rainbowWas {};
+    std::array<fp::ambi::Coefs, fp::Aurora::kCurtains> auroraWas {};
+    float rainbowAzNow = 0.0f, auroraTurnNow = 0.0f, fogTaperWas = 0.0f;
+    bool rainbowWasActive = false, auroraWasActive = false;
+    std::atomic<int> twRequests { 0 }, rwRequests { 0 };
+    int twRequestsSeen = 0, rwRequestsSeen = 0;
+    double rwRainFor = 0.0;   // how long it has been raining (seconds)
+    bool twButtonWas = false, rwRainWas = false, fogWasOn = false, windWasOn = false;
+    juce::Random skyRnd;
+    std::vector<float> skyMono;
+    std::atomic<float>* p_fog = nullptr; std::atomic<float>* p_wind = nullptr; std::atomic<float>* p_hail = nullptr;
+    std::atomic<float>* p_aurora = nullptr; std::atomic<float>* p_twister = nullptr;
+    void moreWeatherInSphere (float* const* busW, float* const* sendW, int n, int order, float seconds);   // hail, rainbow, aurora: points and arcs in the sphere
+    void moreWeatherOnMaster (float* const* chans, int numCh, int n, int order);                           // twister, wind, fog: every channel alike
     fp::Rainboom rainboom;
     fp::HitDetector rbHitsDetector;
     fp::DistanceSource rbDiveDist, rbBoomDist;

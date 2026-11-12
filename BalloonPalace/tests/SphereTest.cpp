@@ -660,8 +660,8 @@ int main (int argc, char** argv)
 
     std::printf ("many grains, every way of flying, all the weather\n");
     {
-        const char* names[] = { "still", "orbit", "lorenz", "flock", "random", "spiral", "lissajous", "rossler", "breathe", "fall", "ping-pong" };
-        for (int mode = 0; mode < 11; ++mode)
+        const char* const* names = fp::Flight::modeNames();   // (Leitner's and Xenakis's flights among them)
+        for (int mode = 0; mode < fp::Flight::numModes; ++mode)
         {
             FreakiePieProcessor p;
             p.setCurrentProgram (0);
@@ -696,6 +696,74 @@ int main (int argc, char** argv)
                 for (int a = 0; a < 16; ++a) moved = std::max (moved, (Vec3 { p.grainView[(size_t) a].x.load(), p.grainView[(size_t) a].y.load(), p.grainView[(size_t) a].z.load() } - before[(size_t) a]).length());
                 check (moved > 0.05f, "and the grains fly", "furthest move in 1.5 s " + juce::String (moved, 2));
             }
+        }
+    }
+
+    std::printf ("the newer weather in the sphere\n");
+    {
+        for (auto* id : { ids::fog, ids::wind, ids::hail, ids::aurora })
+        {
+            FreakiePieProcessor p;
+            p.setCurrentProgram (0);
+            setParam (p, ids::grains, 6.0f); setParam (p, ids::flight, 1.0f);
+            setParam (p, id, 1.0f);
+            auto r = render (p, 16, 8.0, plucks, false);
+            check (r.finite && r.peak <= 0.892f, (juce::String (id) + ": finite, under the ceiling").toRawUTF8(), "peak " + juce::String (db (r.peak), 1) + " dBFS, "
+                   + juce::String (r.cpu / r.seconds * 100.0, 1) + " % of real time");
+            const float amount = juce::String (id) == ids::fog ? p.fogAmount.load() : juce::String (id) == ids::wind ? p.windAmount.load()
+                               : juce::String (id) == ids::hail ? p.hailAmount.load() : p.auroraAmount.load();
+            check (amount > 0.9f, "  it has come in", juce::String (amount, 2));
+            if (juce::String (id) == ids::hail) check (p.hailHits.load() > 4, "  hailstones bounce", juce::String (p.hailHits.load()) + " bounces in 8 s");
+        }
+        {
+            // the wind pushes every grain the same way: standing still, they all lean off their places together
+            FreakiePieProcessor p;
+            p.setCurrentProgram (0);
+            setParam (p, ids::grains, 8.0f); setParam (p, ids::flight, 0.0f);
+            render (p, 16, 2.0, plucks, false);
+            std::vector<Vec3> before;
+            for (int a = 0; a < 8; ++a) before.push_back ({ p.grainView[(size_t) a].x.load(), p.grainView[(size_t) a].y.load(), p.grainView[(size_t) a].z.load() });
+            setParam (p, ids::wind, 1.0f);
+            float furthest = 0.0f;
+            for (int k = 0; k < 12; ++k)
+            {
+                render (p, 16, 1.0, plucks, false, false);
+                for (int a = 0; a < 8; ++a)
+                    furthest = std::max (furthest, (Vec3 { p.grainView[(size_t) a].x.load(), p.grainView[(size_t) a].y.load(), p.grainView[(size_t) a].z.load() } - before[(size_t) a]).length());
+            }
+            check (furthest > 0.03f, "wind: grains standing still are blown off their places", "furthest in 12 s " + juce::String (furthest, 2));
+        }
+        {
+            // a twister takes the grains up into its spiral, and lets them go again
+            FreakiePieProcessor p;
+            p.setCurrentProgram (0);
+            setParam (p, ids::grains, 8.0f); setParam (p, ids::flight, 0.0f);
+            render (p, 16, 1.0, plucks, false);
+            p.requestTwister();
+            auto r = render (p, 16, 5.0, plucks, false, false);
+            float widest = 0.0f;
+            for (int a = 0; a < 8; ++a) widest = std::max (widest, std::sqrt (p.grainView[(size_t) a].x.load() * p.grainView[(size_t) a].x.load() + p.grainView[(size_t) a].y.load() * p.grainView[(size_t) a].y.load()));
+            check (r.finite && r.peak <= 0.892f && p.twisters.load() == 1 && p.twisterAmount.load() > 0.5f, "twister: started, finite, under the ceiling",
+                   "has them " + juce::String (p.twisterAmount.load(), 2) + ", peak " + juce::String (db (r.peak), 1) + " dBFS");
+            check (widest < 0.7f, "  the grains are in its funnel", "furthest from its axis " + juce::String (widest, 2));
+            render (p, 16, 20.0, plucks, false, false);
+            check (p.twisterAmount.load() == 0.0f, "  and it lets them go");
+        }
+        {
+            // the rainbow: after a real shower under a clear sky
+            FreakiePieProcessor p;
+            p.setCurrentProgram (0);
+            setParam (p, ids::grains, 2.0f);
+            setParam (p, ids::rain, 1.0f);
+            render (p, 16, 21.0, plucks, false);
+            setParam (p, ids::rain, 0.0f);
+            auto r = render (p, 16, 5.0, plucks, false, false);
+            check (p.rainbows.load() == 1 && p.rainbowAmount.load() > 0.5f && r.finite && r.peak <= 0.892f, "rainbow: out after 21 s of rain, finite, under the ceiling",
+                   "out " + juce::String (p.rainbowAmount.load(), 2));
+            // its arcs stand above the floor
+            float lowest = 9.0f;
+            for (int k = 0; k < 7; ++k) for (int j = 0; j <= 8; ++j) lowest = std::min (lowest, FreakiePieProcessor::rainbowPoint (p.rainbowAz.load(), k, (float) j / 8.0f).z);
+            check (lowest > -0.01f, "  its arcs stand on the floor, not under it", "lowest point z " + juce::String (lowest, 2));
         }
     }
 

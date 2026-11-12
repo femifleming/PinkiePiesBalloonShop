@@ -21,8 +21,10 @@ There's also a [PDF manual](manual/Pinkie%20Pies%20Balloon%20Palace%20Manual.pdf
 - [Catching sounds](#catching-sounds)
 - [The canister](#the-canister)
 - [Weather](#weather)
+- [More weather](#more-weather)
 - [Sonic rainboom](#sonic-rainboom)
 - [The balloon store](#the-balloon-store)
+- [The gumball menu](#the-gumball-menu)
 - [The chalkboard](#the-chalkboard)
 - [The card](#the-card)
 - [Pinkie](#pinkie)
@@ -72,6 +74,14 @@ A grain glows with its sound, hops when it stutters and frosts over when it free
 The flight token picks how the grains move, and speed sets how fast.
 
 Still keeps each grain where you dropped it. Orbit sends each one round you on its own tilted ring. Lorenz flies them along the Lorenz attractor, the butterfly, each one starting somewhere else on it. Flock makes them a flock of birds (boids): they keep apart, line up and stay together. Random picks a new place every so often and glides there. Spiral winds them round you, climbing and sinking. Lissajous traces looping figures, each grain at its own rates. Rossler flies them on the Rossler attractor, a loose coil that now and then flicks up. Breathe sends them out to the glass and back in again, like breathing. Fall drops them from the top of the sphere to the bottom, over and over. Ping-pong throws them straight across the sphere, from one side to the other.
+
+Four flights follow Bernhard Leitner, who since 1968 has built rooms out of sound moving along lines of loudspeakers. Line runs each grain along its own straight line through the room and through you, from wall to wall and back at an even pace. Pendulum hangs each grain from a point overhead and swings it through underneath you, slow at the ends and quick in the middle. Column makes a vertical space: each grain climbs and sinks along its own column standing round you. Soundcube is his Soundcube of 1969, a cube with a grid of loudspeakers on every wall (nine to a wall here). The grains don't fly. They step from one loudspeaker to the next, drawing a ring round you and then another one higher or lower.
+
+Five follow Iannis Xenakis. Sonotron is the accelerator of sound particles from Terretektorh, and the turning drums that end Persephassa: all the grains on one ring that turns faster and faster along a logarithmic spiral as it widens, then starts again the other way. Paraboloid glides every grain along its own straight line, and the lines together draw the saddle of the Philips Pavilion, as the string glissandi of Metastaseis do. Gas is Pithoprakta: the grains are the molecules of a gas, each flying straight at a speed drawn from the Maxwell-Boltzmann distribution until it hits the glass and leaves at a new one. Nomos puts the grains on the corners of a cube that turns from one of its 24 rotations to the next, each the product of the two before it, as in Nomos Alpha. Screens cuts the sphere into eight cells and moves each grain from cell to cell by a Markov chain, with the two transition tables of Analogique A.
+
+![Soundcube: the grains step from loudspeaker to loudspeaker](help/sphere_soundcube.jpg)
+
+![Nomos: the grains on the corners of a turning cube](help/sphere_nomos.jpg)
 
 Distance is the size of the bubble you're in, from 1 metre to 50. In a small bubble everything is close and loud and the room answers quickly; in a big one everything is far away, quieter, a little duller and roomier. It sounds the way distance does, after the IEM RoomEncoder: the sound takes longer to arrive from further away (so anything flying towards you or away bends in pitch, like a passing car), and the walls of a room round the bubble answer each sound faintly. Close in, a sound spreads round your head.
 
@@ -203,6 +213,30 @@ With auto weather on, the sky looks after itself. Every few minutes the weather 
 
 ![Weather](../../docs/help/snow.jpg)
 
+## More weather
+
+Under the first row of weather switches is a second, smaller row: fog, wind, hail, aurora and twister.
+
+Fog blurs every attack. The sound goes through six short echoes too close together to hear apart, so a hit loses its edge without growing a tail, and the highs sink. In the sphere the fog also hides where things are. The whole scene goes a little soft at the edges, and fog banks drift through the ball: a grain inside one comes from all round you instead of from one point, duller and with more of the room on it, until it flies out again.
+
+Wind comes in gusts. The sound is read through a delay that keeps drifting, so its pitch wavers a few cents sharp and flat, up to about a fifth of a semitone in a strong gust. The wind also blows every grain the same way across the sphere, harder in each gust, and the balloons lean over with it. The wind blows the fog away: turning one on sends the other off.
+
+Hail throws hailstones. Each one is a tiny slice of the last moment of your sound, hit hard and then bouncing, quicker and quieter, like a ball dropped on a table. Every stone lands high overhead at its own bearing and bounces its way down to the floor.
+
+The aurora plays your sound an octave up into a long reverb. It hangs in four curtains high up round you. They drift slowly round the sphere, and each one swells and fades by itself.
+
+Twister starts a whirlwind that lasts between 10 and 20 seconds. It takes every grain up into one spiral, a funnel that is narrow at the floor and wide at the top, and the pitch climbs a fifth and falls back while it turns. When it is over the grains fly back to what they were doing. With wind and clouds both on, one comes by itself every few minutes.
+
+The rainbow has no switch. When the rain stops under a clear sky (no clouds, no snow) after at least 20 seconds of rain, a rainbow stands in the sphere for about 25 seconds: seven arcs across one side of the sky, red the lowest sound and the outermost arc, violet the highest and the innermost, each colour arriving a little after the one before.
+
+Auto weather knows all of these. Fog comes after cloud, rain or snow. Wind can blow up a storm. Hail falls out of a storm, and an aurora follows a clear spell.
+
+![Fog in the sphere](help/sphere_fog.jpg)
+
+![A twister takes the grains up](help/sphere_twister.jpg)
+
+![A rainbow and the aurora](help/sphere_rainbow.jpg)
+
 ## Sonic rainboom
 
 The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and Rainbow Dash dives in from the sky, faster and faster, the rainbow streaming out behind her, until she breaks the sound barrier: a boom and a rainbow at the same moment.
@@ -226,6 +260,20 @@ Pick a bought effect again to give it back, or pop one of its balloons with the 
 The tuned effects in the store follow the scale as well. The ring mod multiplies the sound by a tone, and with follow turned up the tone rises as the sound gets louder.
 
 ![The balloon store](../../docs/help/store.jpg)
+
+## The gumball menu
+
+Click gumballs, under the rainboom's cloud at the top right, to open the gumball menu. It shows every control in the palace again as a gumball that stays where it is, for when you'd rather not chase a balloon. There is one row for each effect, in its balloons' colour. The sphere's own tokens (flight, speed, distance, deviate, grain mode, doppler, order and how many grains) have a row too.
+
+Each gumball is a glass ball that fills with colour as its value goes up, with the value written inside. Drag one up or down to turn it (hold shift for fine changes), or scroll over it. Click a switch to flip it. Click a setting like shape to step to the next one, or right-click for the one before. Double-click puts a gumball back how it started. Point at one to read its full name and value.
+
+The gumballs and the balloons are the same controls. Turn one and the other follows, and the balloons still work just as they did.
+
+When an effect's balloons come into the room, bought at the store or dropped by the lightning, its row of gumballs pops in here. When they pop, the row pops out. With many effects bought, short rows share a line and the page scrolls.
+
+Click the cross or press escape to go back.
+
+![The gumball menu](help/gumballs.jpg)
 
 ## The chalkboard
 

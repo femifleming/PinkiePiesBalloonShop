@@ -8,6 +8,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "../Source/PluginProcessor.h"
 #include "../Source/PluginEditor.h"
+#include "../Source/MoreUi.h"
 
 using namespace juce;
 extern int palaceDbgFrames;
@@ -31,6 +32,18 @@ struct DelayMatch
 
 struct FreakieTestAccess
 {
+    // the newer weather and the gumball machine
+    static GumballPage* gumballs (FreakiePieEditor& e) { return e.gumballPage.get(); }
+    static int aliveBalloons (FreakiePieEditor& e)
+    {
+        int n = 0;
+        for (auto* f : e.floaters) if (auto* b = dynamic_cast<Balloon*> (f)) n += b->alive ? 1 : 0;
+        return n;
+    }
+    static void openGumballs (FreakiePieEditor& e) { e.openGumballs(); }
+    static void weather (FreakiePieEditor& e, int which) { e.weatherBar->toggle (which); }
+    static bool skyOn (FreakiePieEditor& e, int i) { return e.skyValue[i] > 0.5f; }
+    static juce::Rectangle<float> gumballButton (FreakiePieEditor& e) { return e.gumballButton; }
     // run the bouquet's physics for a while, as the 60 Hz timer would
     static void run (FreakiePieEditor& e, float seconds)
     {
@@ -341,11 +354,84 @@ static int dumpForManual (const char* dir)
     return 0;
 }
 
+// NEW_SHOTS=<folder>: pictures of the newer weather and the gumball machine
+static int newShots (const char* dir)
+{
+    FreakiePieProcessor::rememberLastState = false;
+    const File out (File::getCurrentWorkingDirectory().getChildFile (String (dir)));
+    out.createDirectory();
+    FreakiePieProcessor p;
+    p.setRateAndBufferSizeDetails (48000.0, 512);
+    p.prepareToPlay (48000.0, 512);
+    std::unique_ptr<FreakiePieEditor> ed (dynamic_cast<FreakiePieEditor*> (p.createEditor()));
+    ed->setSize (FreakiePieEditor::designW, FreakiePieEditor::designH);
+    Random r (7);
+    double ph = 0.0;
+    auto play = [&] (float seconds)
+    {
+        AudioBuffer<float> buf (jmax (2, p.getTotalNumOutputChannels()), 512);
+        MidiBuffer midi;
+        const int blocks = (int) (seconds * 48000.0f / 512.0f);
+        for (int b = 0; b < blocks; ++b)
+        {
+            buf.clear();
+            for (int i = 0; i < 512; ++i)
+            {
+                ph += 220.0 / 48000.0;
+                const float beat = (float) std::fmod (ph * 0.01, 1.0);
+                const float x = 0.3f * (float) std::sin (6.2831853 * ph) * std::exp (-6.0f * beat) + 0.05f * (r.nextFloat() - 0.5f);
+                buf.setSample (0, i, x); buf.setSample (1, i, x);
+            }
+            p.processBlock (buf, midi);
+            if (b % 6 == 0) FreakieTestAccess::run (*ed, 1.0f / 60.0f * 4.0f);
+        }
+    };
+    auto set = [&] (const char* id, float v) { if (auto* prm = p.apvts.getParameter (id)) prm->setValueNotifyingHost (v); };
+    auto shot = [&] (const String& name)
+    {
+        auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+        FileOutputStream os (out.getChildFile (name + ".png"));
+        os.setPosition (0); os.truncate();
+        PNGImageFormat().writeImageToStream (img, os);
+        std::printf ("  wrote %s.png\n", name.toRawUTF8());
+    };
+    play (2.0f);
+    set (ids::fog, 1.0f); play (4.0f); shot ("sky_fog");
+    set (ids::fog, 0.0f); set (ids::wind, 1.0f); set (ids::cloudy, 1.0f); play (5.0f); shot ("sky_wind");
+    p.requestTwister(); play (7.0f); shot ("sky_twister");
+    set (ids::wind, 0.0f); set (ids::rain, 1.0f); set (ids::hail, 1.0f); play (5.0f); shot ("sky_hail");
+    set (ids::hail, 0.0f); set (ids::cloudy, 0.0f); play (18.0f);   // (a rainbow needs 20 s of rain behind it)
+    set (ids::rain, 0.0f); set (ids::aurora, 1.0f); play (6.0f); shot ("sky_rainbow");
+    set (ids::aurora, 0.0f); play (1.0f);
+    // Leitner's and Xenakis's flights
+    if (auto* g = p.apvts.getParameter (ids::grains)) g->setValueNotifyingHost (g->convertTo0to1 (8.0f));
+    auto fly = [&] (int mode, const char* name)
+    {
+        if (auto* f = p.apvts.getParameter (ids::flight)) f->setValueNotifyingHost (f->convertTo0to1 ((float) mode));
+        play (6.0f);
+        shot (name);
+    };
+    fly (fp::Flight::soundcube, "flight_soundcube");
+    fly (fp::Flight::pendulum, "flight_pendulum");
+    fly (fp::Flight::sonotron, "flight_sonotron");
+    fly (fp::Flight::nomos, "flight_nomos");
+    fly (fp::Flight::paraboloid, "flight_paraboloid");
+    FreakieTestAccess::openGumballs (*ed); FreakieTestAccess::run (*ed, 1.0f); shot ("menu_gumballs");
+    FreakieTestAccess::buy (*ed, 1, true); FreakieTestAccess::buy (*ed, FreakieTestAccess::stutterItem, true);
+    FreakieTestAccess::run (*ed, 0.12f); shot ("menu_popping");
+    FreakieTestAccess::run (*ed, 1.0f); shot ("menu_bought");
+    for (int e = 0; e < fp::StoreFX::kNum; ++e) FreakieTestAccess::buy (*ed, e, true);
+    FreakieTestAccess::run (*ed, 1.5f); shot ("menu_everything");
+    ed.reset();
+    return 0;
+}
+
 int main (int argc, char** argv)
 {
     std::setvbuf (stdout, nullptr, _IOLBF, 0);   // one line at a time, so a long run shows where it is
     ScopedJuceInitialiser_GUI init;
     if (auto* md = std::getenv ("MANUAL_DUMP")) return dumpForManual (md);
+    if (auto* ns = std::getenv ("NEW_SHOTS")) return newShots (ns);
     int fails = 0;
     FreakiePieProcessor::rememberLastState = false;   // start every test instance from the defaults
 
@@ -1098,9 +1184,9 @@ int main (int argc, char** argv)
             }
             const double meanMin = t / 60.0 / jmax (1, changes);
             int kinds = 0; for (int k : seen) kinds += k > 0 ? 1 : 0;
-            std::printf ("auto weather: first change after %d s, %d changes in 10 days (a spell every %.1f min on average), %d of 6 kinds, heat<->snow jumps %d\n",
-                         firstAt, changes, meanMin, kinds, heatToSnow);
-            if (firstAt < 30 || firstAt > 91 || meanMin < 3.0 || meanMin > 10.0 || kinds != 6 || heatToSnow != 0) FAIL_HERE();
+            std::printf ("auto weather: first change after %d s, %d changes in 10 days (a spell every %.1f min on average), %d of %d kinds, heat<->snow jumps %d\n",
+                         firstAt, changes, meanMin, kinds, (int) fp::AutoWeather::numSpells, heatToSnow);
+            if (firstAt < 30 || firstAt > 91 || meanMin < 3.0 || meanMin > 10.0 || kinds != (int) fp::AutoWeather::numSpells || heatToSnow != 0) FAIL_HERE();
         }
         // auto weather in the plug-in: switched on, time passing moves the switches; switched off, it leaves them
         {
@@ -2816,6 +2902,67 @@ int main (int argc, char** argv)
         weather (true, false, "_rain.png");
         weather (false, true, "_helium.png");
         weather (true, true, "_both.png");
+    }
+
+
+    // the second weather row and the gumball menu
+    {
+        FreakiePieProcessor p;
+        p.setRateAndBufferSizeDetails (48000.0, 256);
+        p.prepareToPlay (48000.0, 256);
+        std::unique_ptr<FreakiePieEditor> ed (dynamic_cast<FreakiePieEditor*> (p.createEditor()));
+        ed->setSize (FreakiePieEditor::designW, FreakiePieEditor::designH);
+        FreakieTestAccess::weather (*ed, 5);
+        const bool fogOn = FreakieTestAccess::skyOn (*ed, 0);
+        FreakieTestAccess::weather (*ed, 6);   // the wind blows the fog away
+        const bool windOn = FreakieTestAccess::skyOn (*ed, 1), fogGone = ! FreakieTestAccess::skyOn (*ed, 0);
+        FreakieTestAccess::weather (*ed, 6);
+        FreakieTestAccess::weather (*ed, 7); FreakieTestAccess::weather (*ed, 8);
+        const bool hailAndAurora = p.apvts.getRawParameterValue (ids::hail)->load() > 0.5f && p.apvts.getRawParameterValue (ids::aurora)->load() > 0.5f;
+        FreakieTestAccess::weather (*ed, 7); FreakieTestAccess::weather (*ed, 8);
+        std::printf ("second weather row: fog on %d, wind on %d and the fog gone %d, hail and aurora on %d\n", (int) fogOn, (int) windOn, (int) fogGone, (int) hailAndAurora);
+        if (! (fogOn && windOn && fogGone && hailAndAurora)) FAIL_HERE();
+
+        auto* gp = FreakieTestAccess::gumballs (*ed);
+        FreakieTestAccess::openGumballs (*ed);
+        FreakieTestAccess::run (*ed, 0.6f);
+        const int rows0 = gp->numRows(), knobs0 = gp->numKnobs(), balloons = FreakieTestAccess::aliveBalloons (*ed);
+        std::printf ("gumball menu: %d rows, %d gumballs for %d balloons in the room\n", rows0, knobs0, balloons);
+        if (! (gp->isOpen() && rows0 >= 6 && knobs0 >= balloons && knobs0 <= balloons + 8)) FAIL_HERE();
+        {
+            // drag a gumball up: the parameter follows (and its balloon is attached to the same parameter)
+            auto* prm = p.apvts.getParameter (ids::rvMix);
+            prm->setValueNotifyingHost (0.2f);
+            const auto c = gp->centreFor (prm);
+            auto ev = [&] (Point<float> q, bool dragging) { return MouseEvent (Desktop::getInstance().getMainMouseSource(), q, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gp, gp, Time(), c, Time(), 1, dragging); };
+            gp->mouseDown (ev (c, false));
+            gp->mouseDrag (ev (c.translated (0.0f, -85.0f), true));
+            gp->mouseUp (ev (c.translated (0.0f, -85.0f), true));
+            const float dragged = prm->getValue();
+            gp->mouseDoubleClick (ev (c, false));
+            const float reset = prm->getValue();
+            // a switch flips on a click
+            auto* sw = p.apvts.getParameter (ids::grFreeze);
+            const float was = sw->getValue();
+            const auto cs = gp->centreFor (sw);
+            gp->mouseDown (MouseEvent (Desktop::getInstance().getMainMouseSource(), cs, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, gp, gp, Time(), cs, Time(), 1, false));
+            const float flipped = sw->getValue();
+            sw->setValueNotifyingHost (was);
+            std::printf ("gumball menu: reverb mix dragged 0.20 -> %.2f, double-click -> %.2f (starts at %.2f); freeze clicked %.0f -> %.0f\n",
+                         dragged, reset, prm->getDefaultValue(), was, flipped);
+            if (! (c.x > 0.0f && std::abs (dragged - 0.7f) < 0.02f && std::abs (reset - prm->getDefaultValue()) < 1.0e-4f && flipped != was)) FAIL_HERE();
+        }
+        FreakieTestAccess::buy (*ed, 1, true);
+        FreakieTestAccess::run (*ed, 1.0f);
+        const int rows1 = gp->numRows(), knobs1 = gp->numKnobs();
+        FreakieTestAccess::buy (*ed, 1, false);
+        FreakieTestAccess::run (*ed, 1.5f);
+        const int rows2 = gp->numRows();
+        gp->close();
+        FreakieTestAccess::run (*ed, 0.6f);
+        std::printf ("gumball menu: buying an effect %d -> %d rows (%d -> %d gumballs), giving it back -> %d rows; closed %d\n",
+                     rows0, rows1, knobs0, knobs1, rows2, (int) ! gp->isVisible());
+        if (! (rows1 == rows0 + 1 && knobs1 == knobs0 + 4 && rows2 == rows0 && ! gp->isVisible())) FAIL_HERE();
     }
 
     std::printf ("%d Balloon Shop checks not applicable in the sphere\n", skipped);

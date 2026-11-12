@@ -17,8 +17,10 @@ There's also a [PDF manual](manual/Pinkie%20Pies%20Balloon%20Shop%20Manual.pdf) 
 - [Catching sounds](#catching-sounds)
 - [The canister](#the-canister)
 - [Weather](#weather)
+- [More weather](#more-weather)
 - [Sonic rainboom](#sonic-rainboom)
 - [The balloon store](#the-balloon-store)
+- [The gumball menu](#the-gumball-menu)
 - [The chalkboard](#the-chalkboard)
 - [The card](#the-card)
 - [Pinkie](#pinkie)
@@ -149,6 +151,32 @@ With auto weather on, the sky looks after itself. Every few minutes the weather 
 
 ![Weather](help/snow.jpg)
 
+## More weather
+
+Under the first row of weather switches is a second, smaller row: fog, wind, hail, aurora and twister.
+
+Fog blurs every attack. The sound goes through six short echoes too close together to hear apart, so a hit loses its edge without growing a tail, and the highs sink. A pale haze drifts through the shop.
+
+Wind comes in gusts. The sound is read through a delay that keeps drifting, so its pitch wavers a few cents sharp and flat, up to about a fifth of a semitone in a strong gust. Each gust swells the sound a little and leans it to one side, and the balloons lean over with it. The wind blows the fog away: turning one on sends the other off.
+
+Hail throws hailstones. Each one is a tiny slice of the last moment of your sound, hit hard and then bouncing, quicker and quieter, like a ball dropped on a table. Every stone lands somewhere else between left and right.
+
+The aurora plays your sound an octave up into a long reverb. It hangs in four curtains across the stereo field, and each curtain swells and fades by itself.
+
+Twister starts a whirlwind that lasts between 10 and 20 seconds. The pitch climbs a fifth and falls back while the sound whirls from side to side, faster and faster, and the balloons are swept round with it. With wind and clouds both on, one comes by itself every few minutes.
+
+The rainbow has no switch. When the rain stops under a clear sky (no clouds, no snow) after at least 20 seconds of rain, a rainbow stands over the shop for about 25 seconds. It is your sound in seven colours, from red, the lowest, on the left to violet, the highest, on the right, each colour arriving a little after the one before.
+
+Auto weather knows all of these. Fog comes after cloud, rain or snow. Wind can blow up a storm. Hail falls out of a storm, and an aurora follows a clear spell.
+
+![Fog](help/fog.jpg)
+
+![Wind and a twister](help/twister.jpg)
+
+![Hail](help/hail.jpg)
+
+![A rainbow and the aurora](help/rainbow.jpg)
+
 ## Sonic rainboom
 
 The little cloud with a rainbow, under help and reset, is the sonic rainboom. Click it and Rainbow Dash dives in from the sky, faster and faster, the rainbow streaming out behind her, until she breaks the sound barrier: a boom and a rainbow at the same moment.
@@ -172,6 +200,22 @@ Pick a bought effect again to give it back, or pop one of its balloons with the 
 The tuned effects in the store follow the scale as well. The ring mod multiplies the sound by a tone, and with follow turned up the tone rises as the sound gets louder.
 
 ![The balloon store](help/store.jpg)
+
+## The gumball menu
+
+Click gumballs, under the rainboom's cloud at the top right, to open the gumball menu. It shows every control in the shop again as a gumball that stays where it is, for when you'd rather not chase a balloon. There is one row for each effect, in its balloons' colour.
+
+Each gumball is a glass ball that fills with colour as its value goes up, with the value written inside. Drag one up or down to turn it (hold shift for fine changes), or scroll over it. Click a switch to flip it. Click a setting like shape to step to the next one, or right-click for the one before. Double-click puts a gumball back how it started. Point at one to read its full name and value.
+
+The gumballs and the balloons are the same controls. Turn one and the other follows, and the balloons still work just as they did.
+
+When an effect's balloons come into the room, bought at the store or dropped by the lightning, its row of gumballs pops in here. When they pop, the row pops out. With many effects bought, short rows share a line and the page scrolls.
+
+Click the cross or press escape to go back.
+
+![The gumball menu](help/gumballs.jpg)
+
+![With two effects bought](help/gumballs_bought.jpg)
 
 ## The chalkboard
 

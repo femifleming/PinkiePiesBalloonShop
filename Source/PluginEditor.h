@@ -76,6 +76,8 @@ public:
 };
 
 class FreakiePieEditor;
+struct SkyArt;
+class GumballPage;
 
 //==============================================================================
 // The chalkboard: a little board on the wall shows the grain shape you drew. Click it and it
@@ -179,6 +181,7 @@ public:
     void mouseDown (const juce::MouseEvent&) override;   // right-click the snow or the heat for their fade times
     void step (float dt);
     void toggle (int which);   // (the snow and the heatwave never fall together: one turns the other off)   // 0 cloudy, 1 rain, 2 snow, 3 heat, 4 auto
+                               // the second row: 5 fog, 6 wind (each sends the other away), 7 hail, 8 aurora, 9 twister (starts one)
     static constexpr float X = 290.0f, Y = 0.0f, W = 540.0f, H = 90.0f;
     int buttonAt (juce::Point<float> contentPoint) const noexcept;
 private:
@@ -829,6 +832,19 @@ private:
     juce::Rectangle<float> heatButton { 604.0f, 12.0f, 110.0f, 40.0f };
     void drawHeatButton (juce::Graphics&) const;
     void drawHeatShimmer (juce::Graphics&, juce::Rectangle<float> full) const;
+
+    // the newer weather (fog, wind, hail, aurora, and the twister's button): a second row of small switches,
+    // and their pictures (see MoreUi.h)
+    float skyValue[4] {};
+    std::unique_ptr<juce::ParameterAttachment> skyAtt[4];
+    std::unique_ptr<SkyArt> skyArt;
+    void skyStep (float dt);
+
+    // the gumball machine: a page with every balloon's control again as a gumball that stays put
+    std::unique_ptr<GumballPage> gumballPage;
+    juce::Rectangle<float> gumballButton { 950.0f, 144.0f, 108.0f, 26.0f };
+    void drawGumballButton (juce::Graphics&) const;
+    void openGumballs();
 
     // auto weather: a little switch; while it's on the sky changes by itself every few minutes
     float autoValue = 0.0f, autoVis = 0.0f;

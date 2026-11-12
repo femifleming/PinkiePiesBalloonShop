@@ -60,6 +60,9 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::snow, 1 }, "Snow", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::heat, 1 }, "Heatwave", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::autoWeather, 1 }, "Auto Weather", false));
+    for (auto [id, name] : { std::pair { ids::fog, "Fog" }, std::pair { ids::wind, "Wind" }, std::pair { ids::hail, "Hail" },
+                             std::pair { ids::aurora, "Aurora" }, std::pair { ids::twister, "Twister" } })
+        layout.add (std::make_unique<AudioParameterBool> (ParameterID { id, 1 }, name, false));
     // the sonic rainboom
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rbBoom, 1 }, "Rainboom", false));
     layout.add (std::make_unique<F> (ParameterID { ids::rbLevel, 1 }, "Rainboom Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f,
@@ -180,7 +183,7 @@ AudioProcessorValueTreeState::ParameterLayout FreakiePieProcessor::createLayout(
                                          { return String (v) + (v == 1 ? " grain" : " grains"); })));
     mixParam (ids::deviate, "Deviate", 0.35f);
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ids::flight, 1 }, "Flight",
-                                                        StringArray { "still", "orbit", "lorenz", "flock", "random", "spiral", "lissajous", "rossler", "breathe", "fall", "ping-pong" }, 1));   // (orbit: things flying round you)
+                                                        StringArray (fp::Flight::modeNames(), fp::Flight::numModes), 1));   // (orbit: things flying round you; the new ones are added at the end, so old sessions keep theirs)
     layout.add (std::make_unique<F> (ParameterID { ids::flightSpeed, 1 }, "Flight Speed", NormalisableRange<float> (0.0f, 1.0f), 0.4f,
                                      A().withStringFromValueFunction ([] (float v, int)
                                      {
@@ -227,6 +230,8 @@ FreakiePieProcessor::FreakiePieProcessor()
     p_snow = get (ids::snow);
     p_snowIn = get (ids::snowIn); p_snowOut = get (ids::snowOut);
     p_heat = get (ids::heat); p_autoWeather = get (ids::autoWeather);
+    p_fog = get (ids::fog); p_wind = get (ids::wind); p_hail = get (ids::hail);
+    p_aurora = get (ids::aurora); p_twister = get (ids::twister);
     p_rbBoom = get (ids::rbBoom); p_rbLevel = get (ids::rbLevel); p_rbTail = get (ids::rbTail);
     p_rbHits = get (ids::rbHits); p_rbStorms = get (ids::rbStorms); p_rbFast = get (ids::rbFast);
     p_stAmount = get (ids::stAmount); p_stBounce = get (ids::stBounce);
@@ -437,6 +442,19 @@ void FreakiePieProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     trixieNoise.prepare (sampleRate);
     stutter.prepare (sampleRate);
     rainboom.prepare (sampleRate, samplesPerBlock);
+    fog.prepare (sampleRate, fp::ambi::kCh, nb);
+    wind.prepare (sampleRate, fp::ambi::kCh, nb);
+    twister.prepare (sampleRate, fp::ambi::kCh, nb);
+    hail.prepare (sampleRate, nb);
+    rainbow.prepare (sampleRate, nb);
+    aurora.prepare (sampleRate, nb);
+    skyMono.assign ((size_t) nb, 0.0f);
+    for (auto& c : hailWas) c.fill (0.0f);
+    for (auto& c : rainbowWas) c.fill (0.0f);
+    for (auto& c : auroraWas) c.fill (0.0f);
+    fogTaperWas = 0.0f; rainbowWasActive = auroraWasActive = false;
+    twButtonWas = p_twister->load() > 0.5f; rwRainWas = p_rain->load() > 0.5f;
+    twRequestsSeen = twRequests.load(); rwRequestsSeen = rwRequests.load();
     rbHitsDetector.prepare (sampleRate);
     rbDiveDist.prepare (sampleRate, samplesPerBlock);
     rbBoomDist.prepare (sampleRate, samplesPerBlock);
@@ -661,6 +679,12 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         if (isPositiveAndBelow (held, kGrains)) flightPaths.place (held, { heldX.load(), heldY.load(), heldZ.load() });
     }
     // (the grains fly through most of the bubble; how big the bubble is, is the Distance knob)
+    {
+        // the wind pushes them all one way (harder in a gust); a twister takes them up
+        const float push = wind.gust(), head = wind.heading();
+        flightPaths.setWind (fp::ambi::Vec3 { std::cos (head), std::sin (head), 0.15f * wind.lean() } * push);
+        flightPaths.setTwister (twister.amount(), twister.angle(), twister.progress());
+    }
     flightPaths.step (seconds, (int) std::lround (p_flight->load()), p_flightSpeed->load(), 0.85f, points);
     bubbleNow += (bubbleMetres (p_spread->load()) - bubbleNow) * std::min (1.0f, seconds / 0.15f);   // (glides, so turning it does not jump)
     const float sphereMetres = bubbleNow;
@@ -670,7 +694,7 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         for (auto& g : grainsArr) g->dist.doppler = dop;
     }
     {
-        const bool on[fp::SkyPatches::numKinds] = { p_cloudy->load() > 0.5f, p_rain->load() > 0.5f, p_snow->load() > 0.5f, p_heat->load() > 0.5f };
+        const bool on[fp::SkyPatches::numKinds] = { p_cloudy->load() > 0.5f, p_rain->load() > 0.5f, p_snow->load() > 0.5f, p_heat->load() > 0.5f, p_fog->load() > 0.5f };
         sky.step (seconds, on);
         for (int i = 0; i < fp::SkyPatches::kNum; ++i)
         {
@@ -716,6 +740,8 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         float weatherAll = 0.0f;
         for (int k = 0; k < fp::SkyPatches::numKinds; ++k) weatherAll = std::max (weatherAll, sky.exposure (pos, k));
         const float inSnow = sky.exposure (pos, fp::SkyPatches::snow), inHeat = sky.exposure (pos, fp::SkyPatches::heat);
+        const float inFog = sky.exposure (pos, fp::SkyPatches::fog);
+        g.dist.blur = inFog;   // in a fog bank it comes from all round, duller, and more of it goes to the reverb
         // the first grain is you: it only strays when the weather gets to it
         const float amount = jlimit (0.0f, 1.0f, (v == 0 ? 0.0f : deviation) + 0.8f * weatherAll);
         stepGrainDeviation (g, v, amount, weatherAll, seconds);
@@ -792,7 +818,7 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
         if (starting) g.dist.reset();
         float* mono = monoBuf.data();
         for (int i = 0; i < n; ++i) mono[i] = 0.70710678f * (vL[i] + vR[i]);
-        g.dist.process (mono, n, pos, sphereMetres, busW, sendW, 0.3f + 0.7f * std::min (1.0f, pos.length()));
+        g.dist.process (mono, n, pos, sphereMetres, busW, sendW, std::min (1.3f, 0.3f + 0.7f * std::min (1.0f, pos.length()) + 0.5f * inFog));
         g.gain = gTo;
 
         const int ev = g.stutter.eventCount.load();
@@ -934,6 +960,7 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     }
 
     rainboomBlock (inL, inR, busW, sendW, n, sphereMetres, count, seconds);   // (before the reverb, so it can ring in the sphere too)
+    moreWeatherInSphere (busW, sendW, n, aOrder, seconds);
 
     // the one reverb, for the whole sphere (the lilac balloons)
     {
@@ -969,6 +996,7 @@ void FreakiePieProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     // the master: weather, heat, snow and the chalkboard EQ, two channels at a time, then the leveler and limiter, linked
     const bool rainOn = p_rain->load() > 0.5f, heliumOn = p_helium->load() > 0.5f, cloudOn = p_cloudy->load() > 0.5f;
     const bool heatOn = p_heat->load() > 0.5f, snowOn = p_snow->load() > 0.5f;
+    moreWeatherOnMaster (chans, C, n, aOrder);
     for (int k = 0; k < pairsNow; ++k)
     {
         auto& w = weather[(size_t) k];
@@ -1188,6 +1216,159 @@ void FreakiePieProcessor::rainboomBlock (const float* inL, const float* inR, flo
     }
 }
 
+// A point of the rainbow: a circle 42 degrees (a real bow's radius; each colour 3 degrees inside the
+// last here, so you can hear them apart) round the point opposite the sun, which is below the horizon
+// behind where the bow stands. Only the part above the floor is there.
+fp::ambi::Vec3 FreakiePieProcessor::rainbowPoint (float az, int band, float along) noexcept
+{
+    using fp::ambi::Vec3;
+    const Vec3 c = fp::ambi::fromAzEl (az, -0.30f);                             // the bow's middle (below the horizon)
+    const Vec3 side { -std::sin (az), std::cos (az), 0.0f };
+    const Vec3 up { c.y * side.z - c.z * side.y, c.z * side.x - c.x * side.z, c.x * side.y - c.y * side.x };
+    const float rho = (50.0f - 3.0f * (float) band) * MathConstants<float>::pi / 180.0f;   // red outermost
+    // from one foot on the floor to the other (where the circle meets z = 0)
+    const float foot = std::asin (jlimit (0.0f, 1.0f, std::tan (0.30f) / std::tan (rho)));
+    const float th = foot + (MathConstants<float>::pi - 2.0f * foot) * jlimit (0.0f, 1.0f, along);
+    return c * std::cos (rho) + (side * std::cos (th) + up * std::sin (th)) * std::sin (rho);
+}
+
+// Hail, the rainbow and the aurora, in the sphere: made from everything the sphere is playing (its W),
+// each one put where it belongs, before the reverb so they ring in the room too.
+//   * hail: every stone lands overhead at its own bearing and bounces its way down to the floor
+//   * the rainbow: seven arcs across one side of the sky, red outermost, when the rain stops under a clear sky
+//   * the aurora: four curtains high up round you, drifting slowly round and swelling and fading
+void FreakiePieProcessor::moreWeatherInSphere (float* const* busW, float* const* sendW, int n, int order, float seconds)
+{
+    using fp::ambi::Vec3;
+    using fp::ambi::Coefs;
+    if ((int) skyMono.size() < n) skyMono.resize ((size_t) n);
+    float* m = skyMono.data();
+    for (int i = 0; i < n; ++i) m[i] = busW[0][i];
+    const int nch = fp::ambi::chFor (order);
+    const float inv = 1.0f / (float) n;
+    auto add = [&] (const float* y, Coefs& was, const Coefs& c, bool jump, float send)
+    {
+        if (jump) was = c;
+        for (int ch = 0; ch < nch; ++ch)
+        {
+            const float c0 = was[(size_t) ch], dc = (c[(size_t) ch] - c0) * inv;
+            if (c0 == 0.0f && dc == 0.0f) continue;
+            float* o = busW[ch];
+            float* sd = sendW[ch];
+            for (int i = 0; i < n; ++i)
+            {
+                const float v = (c0 + dc * (float) (i + 1)) * y[i];
+                o[i] += v;
+                sd[i] += send * v;
+            }
+        }
+        was = c;
+    };
+
+    hail.process (m, n, p_hail->load() > 0.5f);
+    for (int k = 0; k < fp::Hail::kStones; ++k)
+    {
+        auto& sv = stoneView[(size_t) k];
+        if (! hail.active (k) && ! hail.fresh (k)) { sv.on.store (0.0f); continue; }
+        const Vec3 at = fp::ambi::fromAzEl (hail.azimuth (k), -0.35f + 1.6f * hail.height (k)) * 0.9f;   // from high overhead down to the floor
+        add (hail.out (k), hailWas[(size_t) k], fp::ambi::sh (at.normalised(), order), hail.fresh (k), 0.5f);
+        sv.x.store (at.x); sv.y.store (at.y); sv.z.store (at.z); sv.on.store (1.0f);
+    }
+    hailAmount.store (hail.amount()); hailHits.store (hail.hits.load());
+
+    {
+        const bool rainNow = p_rain->load() > 0.5f;
+        // the sun comes out after a real shower (20 s of rain or more: a quick flick of the switch brings none)
+        bool go = rwRainWas && ! rainNow && rwRainFor >= 20.0 && p_cloudy->load() < 0.5f && p_snow->load() < 0.5f;
+        rwRainFor = rainNow ? rwRainFor + (double) n / (getSampleRate() > 0.0 ? getSampleRate() : 48000.0) : 0.0;
+        rwRainWas = rainNow;
+        if (const int r = rwRequests.load(); r != rwRequestsSeen) { rwRequestsSeen = r; go = true; }
+        if (go)
+        {
+            if (! rainbow.active()) rainbowAzNow = skyRnd.nextFloat() * MathConstants<float>::twoPi;
+            rainbow.start (25.0f);
+        }
+    }
+    rainbow.process (m, n);
+    if (rainbow.active())
+    {
+        constexpr int N = 9;
+        for (int k = 0; k < fp::Rainbow::kBands; ++k)
+        {
+            Coefs c {};
+            for (int j = 0; j < N; ++j)
+            {
+                const auto e = fp::ambi::sh (rainbowPoint (rainbowAzNow, k, (float) j / (float) (N - 1)).normalised(), order);
+                for (int ch = 0; ch < nch; ++ch) c[(size_t) ch] += e[(size_t) ch] / (float) N;
+            }
+            add (rainbow.band (k), rainbowWas[(size_t) k], c, ! rainbowWasActive, 0.3f);
+        }
+    }
+    rainbowWasActive = rainbow.active();
+    rainbowAmount.store (rainbow.amount()); rainbows.store (rainbow.numStarted()); rainbowAz.store (rainbowAzNow);
+
+    aurora.process (m, n, p_aurora->load() > 0.5f);
+    if (aurora.active())
+    {
+        auroraTurnNow += seconds * 0.05f;   // (once round in about two minutes)
+        if (auroraTurnNow > MathConstants<float>::twoPi) auroraTurnNow -= MathConstants<float>::twoPi;
+        for (int j = 0; j < fp::Aurora::kCurtains; ++j)
+        {
+            // a curtain: three points side by side, high up
+            Coefs c {};
+            const float az = auroraTurnNow + MathConstants<float>::halfPi * (float) j, el = 0.85f + 0.15f * std::sin (auroraTurnNow * 3.0f + (float) j);
+            for (int q = -1; q <= 1; ++q)
+            {
+                const auto e = fp::ambi::sh (fp::ambi::fromAzEl (az + 0.3f * (float) q, el), order);
+                for (int ch = 0; ch < nch; ++ch) c[(size_t) ch] += e[(size_t) ch] / 3.0f;
+            }
+            add (aurora.out (j), auroraWas[(size_t) j], c, ! auroraWasActive, 0.4f);
+        }
+    }
+    auroraWasActive = aurora.active();
+    auroraAmount.store (aurora.amount()); auroraTurn.store (auroraTurnNow);
+    for (int j = 0; j < fp::Aurora::kCurtains; ++j) auroraCurtain[(size_t) j].store (aurora.curtain (j));
+}
+
+// The twister, the wind and the fog, on the whole scene: every channel goes through the same moving
+// delay and the same filters, so nothing moves from where it is. The fog also takes a little off the
+// higher orders of everything (20 % per order at its thickest), so the whole sphere goes soft at the
+// edges; the fog banks drifting through it do far more to the grains inside them.
+void FreakiePieProcessor::moreWeatherOnMaster (float* const* chans, int numCh, int n, int order)
+{
+    const double sr = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    const bool windOn = p_wind->load() > 0.5f;
+    {
+        bool go = false;
+        const bool button = p_twister->load() > 0.5f;
+        if (button && ! twButtonWas) go = true;
+        twButtonWas = button;
+        if (const int r = twRequests.load(); r != twRequestsSeen) { twRequestsSeen = r; go = true; }
+        if (windOn && p_cloudy->load() > 0.5f && ! twister.active() && skyRnd.nextDouble() < (double) n / sr / 150.0) go = true;
+        if (go) twister.start (10.0f + 10.0f * skyRnd.nextFloat());
+    }
+    twister.process (chans, numCh, n);
+    wind.process (chans, numCh, n, windOn);
+    fog.process (chans, numCh, n, p_fog->load() > 0.5f);
+    {
+        const float taper = fp::smoothstep (fog.amount());
+        if (taper > 0.0f || fogTaperWas > 0.0f)
+        {
+            const float inv = 1.0f / (float) n;
+            for (int l = 1; l <= order; ++l)
+            {
+                const float g0 = 1.0f + fogTaperWas * (std::pow (0.8f, (float) l) - 1.0f), g1 = 1.0f + taper * (std::pow (0.8f, (float) l) - 1.0f);
+                for (int ch = l * l; ch < jmin (numCh, fp::ambi::chFor (l)); ++ch)
+                    for (int i = 0; i < n; ++i) chans[ch][i] *= g0 + (g1 - g0) * (float) (i + 1) * inv;
+            }
+        }
+        fogTaperWas = taper;
+    }
+    twisterAmount.store (twister.amount()); twisterAngle.store (twister.angle()); twisters.store (twister.numStarted());
+    windAmount.store (wind.amount()); windGust.store (wind.gust()); windLean.store (wind.lean()); windHeading.store (wind.heading());
+    fogAmount.store (fog.amount());
+}
+
 AudioProcessorEditor* FreakiePieProcessor::createEditor() { return new FreakiePieEditor (*this); }
 
 void FreakiePieProcessor::getStateInformation (MemoryBlock& destData)
@@ -1279,7 +1460,7 @@ void FreakiePieProcessor::resetToNormal()
 
 bool FreakiePieProcessor::trixieMayTouch (const String& id)
 {
-    for (auto* no : { ids::ambiOrder, ids::rbBoom, ids::rbHits, ids::rbStorms, ids::rbThrows, ids::rbFast, ids::grains, ids::grainMode, ids::fxBypass, ids::snow, ids::snowIn, ids::snowOut, ids::heat, ids::heatIn, ids::heatOut, ids::autoWeather, ids::balloonSfx, ids::popsThru, ids::grainsLevel, ids::catchFrom })
+    for (auto* no : { ids::ambiOrder, ids::rbBoom, ids::rbHits, ids::rbStorms, ids::rbThrows, ids::rbFast, ids::grains, ids::grainMode, ids::fxBypass, ids::twister, ids::snow, ids::snowIn, ids::snowOut, ids::heat, ids::heatIn, ids::heatOut, ids::autoWeather, ids::balloonSfx, ids::popsThru, ids::grainsLevel, ids::catchFrom })
         if (id == no) return false;
     return ! id.endsWith ("Owned");
 }
@@ -1336,6 +1517,7 @@ void FreakiePieProcessor::timerCallback()
     const double dt = lastTimerMs > 0.0 ? jlimit (0.0, 5.0, (now - lastTimerMs) * 0.001) : 0.0;
     lastTimerMs = now;
     keepSnowAndHeatApart();
+    keepFogAndWindApart();
     autoWeatherStep (dt);
     // a higher order chosen: make its master stages ready (with the sound paused for that moment)
     const int want = (fp::ambi::chFor (1 + (int) std::lround (p_ambiOrder->load())) + 1) / 2;
@@ -1358,6 +1540,27 @@ void FreakiePieProcessor::preparePairs (int upTo)
         heatWave[(size_t) k]->prepare (preparedRate);
     }
     preparedPairs.store (jmax (preparedPairs.load(), upTo));
+}
+
+// The wind blows the fog away: whichever came on last stays, the other goes off.
+void FreakiePieProcessor::keepFogAndWindApart()
+{
+    const bool fogOn = p_fog->load() > 0.5f, windOn = p_wind->load() > 0.5f;
+    if (fogOn && windOn)
+    {
+        const char* off = ! windWasOn ? ids::fog : ids::wind;
+        if (auto* prm = apvts.getParameter (off))
+        {
+            prm->beginChangeGesture();
+            prm->setValueNotifyingHost (0.0f);
+            prm->endChangeGesture();
+        }
+        fogWasOn = off != ids::fog;
+        windWasOn = off != ids::wind;
+        return;
+    }
+    fogWasOn = fogOn;
+    windWasOn = windOn;
 }
 
 // The snow and the heatwave never fall together: whichever came on last stays, and the other
@@ -1391,7 +1594,7 @@ void FreakiePieProcessor::autoWeatherStep (double seconds)
     {
         autoWasOn = true;
         autoSky.seed ((uint64_t) Time::currentTimeMillis());
-        autoSky.start ({ sw (ids::rain), sw (ids::cloudy), sw (ids::snow), sw (ids::heat) });
+        autoSky.start ({ sw (ids::rain), sw (ids::cloudy), sw (ids::snow), sw (ids::heat), sw (ids::fog), sw (ids::wind), sw (ids::hail), sw (ids::aurora) });
         return;
     }
     if (! autoSky.step (seconds)) return;
@@ -1407,4 +1610,5 @@ void FreakiePieProcessor::autoWeatherStep (double seconds)
             }
     };
     set (ids::rain, k.rain); set (ids::cloudy, k.cloudy); set (ids::snow, k.snow); set (ids::heat, k.heat);
+    set (ids::fog, k.fog); set (ids::wind, k.wind); set (ids::hail, k.hail); set (ids::aurora, k.aurora);
 }
