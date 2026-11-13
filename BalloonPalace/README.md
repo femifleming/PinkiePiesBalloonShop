@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/icon.png" width="160" alt="Pinkie Pie's Balloon Palace icon"></p>
 
-# Pinkie Pie's Balloon Palace: the spatial audio version of Pinkie Pie's Balloon Shop
+# pinkie pie's balloon palace: the spatial audio version of pinkie pie's balloon shop
 
 > **Spatial audio.** Pinkie Pie's Balloon Palace is the Ambisonics version (1st to 7th order, 3rd by default) of [Pinkie Pie's Balloon Shop](../README.md), kept in the Balloon Shop's repository (this folder). It is an **encoder**: stereo goes in, Ambisonics come out (ACN order, SN3D, the format of the IEM and SPARTA plug-ins: 16 channels at 3rd order, 36 at 5th, 64 at 7th), and it decodes nothing itself. Route all of them to a decoder of the same order, such as the IEM AllRADecoder for loudspeakers or the BinauralDecoder for headphones. For the ordinary stereo plug-in, see the [Balloon Shop](../README.md).
 
@@ -39,7 +39,7 @@ On a track with too few channels for the order you picked, the highest order tha
 
 ## Download
 
-The Balloon Palace's releases are tagged `balloonpalace-v...` on the [Balloon Shop's Releases page](https://github.com/femifleming/PinkiePiesBalloonShop/releases), separate from the shop's own:
+The Balloon Palace's releases are tagged `balloonpalace-v...` on the [Balloon Shop's Releases page](https://github.com/femifleming/pinkiepiesballoonshop/releases), separate from the shop's own:
 
 | System | File |
 | --- | --- |
@@ -54,7 +54,7 @@ Install it the way the [Balloon Shop's README](../README.md#install) describes, 
 You need CMake 3.22 or later and a C++20 compiler (Xcode on macOS, Visual Studio 2022 on Windows, GCC or Clang on Linux):
 
 ```sh
-git clone --recursive https://github.com/femifleming/PinkiePiesBalloonShop.git
+git clone --recursive https://github.com/femifleming/pinkiepiesballoonshop.git
 cd PinkiePiesBalloonShop
 cmake -S BalloonPalace -B build-balloonpalace -DCMAKE_BUILD_TYPE=Release
 cmake --build build-balloonpalace --config Release --target BalloonPalace_All

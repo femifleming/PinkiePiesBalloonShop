@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/icon.png" width="160" alt="Pinkie Pie's Balloon Shop icon"></p>
 
-# Pinkie Pie's Balloon Shop
+# pinkie pie's balloon shop
 
 A multi-effect you play as balloons. Every balloon is a control, and how full it is shows its value.
 
@@ -22,13 +22,13 @@ Your sound goes through the effects in the order you set: move the cursor to the
 
 ## Download
 
-Get the latest version from the [Releases page](https://github.com/femifleming/PinkiePiesBalloonShop/releases/latest):
+Get the latest version from the [Releases page](https://github.com/femifleming/pinkiepiesballoonshop/releases/latest):
 
 | System | File |
 | --- | --- |
-| macOS 11 or later (Apple silicon and Intel) | [PinkiePiesBalloonShop-macOS.zip](https://github.com/femifleming/PinkiePiesBalloonShop/releases/latest/download/PinkiePiesBalloonShop-macOS.zip) |
-| Windows 10 or later (64-bit) | [PinkiePiesBalloonShop-Windows.zip](https://github.com/femifleming/PinkiePiesBalloonShop/releases/latest/download/PinkiePiesBalloonShop-Windows.zip) |
-| Linux (x86-64) | [PinkiePiesBalloonShop-Linux.tar.gz](https://github.com/femifleming/PinkiePiesBalloonShop/releases/latest/download/PinkiePiesBalloonShop-Linux.tar.gz) |
+| macOS 11 or later (Apple silicon and Intel) | [PinkiePiesBalloonShop-macOS.zip](https://github.com/femifleming/pinkiepiesballoonshop/releases/latest/download/PinkiePiesBalloonShop-macOS.zip) |
+| Windows 10 or later (64-bit) | [PinkiePiesBalloonShop-Windows.zip](https://github.com/femifleming/pinkiepiesballoonshop/releases/latest/download/PinkiePiesBalloonShop-Windows.zip) |
+| Linux (x86-64) | [PinkiePiesBalloonShop-Linux.tar.gz](https://github.com/femifleming/pinkiepiesballoonshop/releases/latest/download/PinkiePiesBalloonShop-Linux.tar.gz) |
 
 ## Install
 
@@ -76,7 +76,7 @@ This puts the app in `/Applications` and the Audio Unit and VST3 in `~/Library/A
 You need CMake 3.22 or later and a C++20 compiler (Xcode on macOS, Visual Studio 2022 on Windows, GCC or Clang on Linux).
 
 ```sh
-git clone --recursive https://github.com/femifleming/PinkiePiesBalloonShop.git
+git clone --recursive https://github.com/femifleming/pinkiepiesballoonshop.git
 cd PinkiePiesBalloonShop
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --target BalloonShop_All
