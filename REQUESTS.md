@@ -300,3 +300,5 @@ Every request typed while this was being designed and built with Claude Code, in
 
 > 1 One row, all the same size update it all and push it to github etc, the same proocess, update on this computer as well and remove the old version. update this for both shop and palace vsts and desktop apps.
 
+
+1. "for every single app and vst on my github, just make the app logo icon extremely minimal, a letter from this font [Septambres Neau] in some color, on some color background, update all the app icons." (New app icons: one Septambres Neau glyph, one colour on one colour.)
