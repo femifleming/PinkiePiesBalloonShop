@@ -232,9 +232,9 @@ def install_section(cfg):
         n = "Pinkie Pies Balloon Shop"
         brew = """
 <h3>macOS with Homebrew</h3>
-<pre>brew tap femifleming/pinkiepiesballoonshop
-brew trust femifleming/pinkiepiesballoonshop
-brew install --cask pinkiepiesballoonshop</pre>
+<pre>brew tap femifleming/tap
+brew trust --tap femifleming/tap
+brew install --cask femifleming/tap/pinkiepiesballoonshop</pre>
 <p>Recent Homebrew asks you to trust a tap before installing from it. If you installed the shop by hand before, add <code>--force</code> to the last line so Homebrew can replace those copies. This puts the app in <code>/Applications</code> and the Audio Unit and VST3 in <code>~/Library/Audio/Plug-Ins</code>. Update with <code>brew upgrade --cask pinkiepiesballoonshop</code>.</p>"""
         zipname = "PinkiePiesBalloonShop"
         where = "the <a href='https://github.com/femifleming/PinkiePiesBalloonShop/releases/latest'>Releases page</a>"

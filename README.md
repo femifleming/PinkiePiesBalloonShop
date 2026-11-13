@@ -35,9 +35,9 @@ Get the latest version from the [Releases page](https://github.com/femifleming/P
 ### macOS with Homebrew
 
 ```sh
-brew tap femifleming/pinkiepiesballoonshop
-brew trust femifleming/pinkiepiesballoonshop      # recent Homebrew asks you to trust a tap first
-brew install --cask pinkiepiesballoonshop
+brew tap femifleming/tap
+brew trust --tap femifleming/tap      # recent Homebrew asks you to trust a tap first
+brew install --cask femifleming/tap/pinkiepiesballoonshop
 ```
 
 If you installed it by hand before, add `--force` to the last line so Homebrew can replace those copies.
