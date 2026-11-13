@@ -124,3 +124,7 @@ Pinkie Pie's Balloon Shop's code was written with Claude Code (Anthropic), worki
 ## License
 
 The code is released under the GNU Affero General Public License v3 (see [LICENSE](LICENSE)), as JUCE's free licence requires. The artwork is not covered by it (see above).
+
+## Request log
+
+Everything that was asked for while this was designed and built is in [REQUESTS.md](REQUESTS.md).
